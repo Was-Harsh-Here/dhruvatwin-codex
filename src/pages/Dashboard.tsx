@@ -89,14 +89,15 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-/** Live recharts line for one sensor with threshold bands. */
-function LiveChart({
+/** Live recharts line for one sensor with threshold bands. Shared with the equipment detail page. */
+export function LiveChart({
   slug,
   equipmentId,
   sensorId,
   thresholds,
   unit,
   status,
+  height = 280,
 }: {
   slug: StationSlug;
   equipmentId: string;
@@ -104,6 +105,7 @@ function LiveChart({
   thresholds: { warnLow?: number; critLow?: number; warnHigh?: number; critHigh?: number };
   unit: string;
   status: string;
+  height?: number;
 }) {
   const history = useQuery(api.telemetry.getSensorHistory, {
     slug,
@@ -114,14 +116,17 @@ function LiveChart({
 
   if (history === undefined) {
     return (
-      <div className="flex h-[280px] items-center justify-center">
+      <div className="flex items-center justify-center" style={{ height }}>
         <Loader2 className="size-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
   if (history.length === 0) {
     return (
-      <div className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">
+      <div
+        className="flex items-center justify-center text-sm text-muted-foreground"
+        style={{ height }}
+      >
         Waiting for first readings from the simulation.
       </div>
     );
@@ -138,7 +143,7 @@ function LiveChart({
   const stroke = status === "critical" ? "#FF3B47" : status === "warning" ? "#FFB020" : "#00E0C6";
 
   return (
-    <div className="h-[280px] w-full">
+    <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="#1A2533" strokeDasharray="3 3" vertical={false} />

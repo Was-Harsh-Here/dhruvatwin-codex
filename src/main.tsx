@@ -14,6 +14,11 @@ const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const Alerts = lazy(() => import("./pages/Alerts.tsx"));
+const Twin = lazy(() => import("./pages/Twin.tsx"));
+const Catalog = lazy(() => import("./pages/Catalog.tsx"));
+const EquipmentDetail = lazy(() => import("./pages/EquipmentDetail.tsx"));
+const Workspace = lazy(() => import("./pages/Workspace.tsx"));
+const Admin = lazy(() => import("./pages/Admin.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -141,6 +146,61 @@ createRoot(document.getElementById("root")!).render(
                     description="Incident queues and sensor alerts are available to signed-in NCPOR operators."
                   >
                     <Alerts />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/twin"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the Digital Twin"
+                    description="Interactive 3D station twins with live telemetry are available to signed-in operators."
+                  >
+                    <Twin />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/catalog"
+                element={
+                  <RequireAuth
+                    title="Sign in to browse the equipment catalog"
+                    description="The instrumented-systems registry is available to signed-in operators."
+                  >
+                    <Catalog />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/equipment/:equipmentId"
+                element={
+                  <RequireAuth
+                    title="Sign in to open this equipment page"
+                    description="Live equipment pages are available to signed-in operators."
+                  >
+                    <EquipmentDetail />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/workspace"
+                element={
+                  <RequireAuth
+                    title="Sign in to open your workspace"
+                    description="Publishing observations and managing your contributions requires an account."
+                  >
+                    <Workspace />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the admin console"
+                    description="Platform administration is limited to administrator accounts."
+                  >
+                    <Admin />
                   </RequireAuth>
                 }
               />

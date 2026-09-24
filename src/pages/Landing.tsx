@@ -12,11 +12,11 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  Radio,
+  Box,
+  Layers,
+  PenSquare,
   Snowflake,
   Thermometer,
-  Waves,
-  Zap,
 } from "lucide-react";
 import { Link } from "react-router";
 
@@ -125,7 +125,7 @@ export default function Landing() {
             </div>
             <div className="leading-tight">
               <div className="font-display text-sm font-bold tracking-wide text-foreground">
-                {PROJECT_IDENTITY.name}
+                {PROJECT_IDENTITY.name} Platform
               </div>
               <div className="cc-label">Team {PROJECT_IDENTITY.team}</div>
             </div>
@@ -173,14 +173,15 @@ export default function Landing() {
               </Badge>
             </div>
             <h1 className="font-display text-4xl font-extrabold leading-tight tracking-tight text-foreground sm:text-6xl">
-              The digital command centre for India&apos;s{" "}
-              <span className="text-primary">Antarctic stations</span>
+              A living <span className="text-primary">digital twin</span> of India&apos;s{" "}
+              Antarctic stations
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-              DhruvaTwin streams live sensor telemetry from Maitri and Bharati into one
-              operations console: power, thermal, life support, environment, comms and safety
-              channels with automated threshold alerts - built for the scientists and station
-              personnel of NCPOR, Ministry of Earth Sciences.
+              DhruvaTwin Platform mirrors Maitri and Bharati in software: interactive 3D
+              station twins, a live sensor grid, automated alert triage and an open
+              equipment catalog that partner organisations can explore and contribute to.
+              Built for NCPOR, Ministry of Earth Sciences, and the research community
+              that depends on it.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Button asChild size="lg" className="cursor-pointer">
@@ -201,8 +202,13 @@ export default function Landing() {
           <div className="mt-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               {
+                icon: Box,
+                title: "Interactive 3D twins",
+                body: "Explore scale models of Maitri and Bharati with clickable hotspots, camera presets and live telemetry streamed into the scene.",
+              },
+              {
                 icon: Activity,
-                title: "Live sensor dashboard",
+                title: "Live sensor grid",
                 body: "Twenty-plus telemetry channels per station refresh every ten seconds, with threshold bands and status on every reading.",
               },
               {
@@ -211,24 +217,19 @@ export default function Landing() {
                 body: "Threshold breaches raise incidents instantly. Acknowledge, work, and resolve with a full audit of who did what and when.",
               },
               {
-                icon: Zap,
-                title: "Power systems watch",
-                body: "Maitri's four 62.5 kVA generators and Bharati's three 100 kVA CHP units monitored against load and frequency limits.",
+                icon: Layers,
+                title: "Open equipment catalog",
+                body: "A searchable registry of every instrumented system, each with its own live detail page, history and operator discussion.",
+              },
+              {
+                icon: PenSquare,
+                title: "Community contributions",
+                body: "Partner organisations publish field observations, maintenance logs and questions, and discuss them right on the equipment page.",
               },
               {
                 icon: Thermometer,
                 title: "Thermal survivability",
                 body: "The heated Lake Priyadarshini pipeline and habitat loops are tracked so a freeze event is caught in minutes, not hours.",
-              },
-              {
-                icon: Radio,
-                title: "Comms health",
-                body: "VSAT link SNR and latency trended continuously so degradations are visible before they become blackouts.",
-              },
-              {
-                icon: Waves,
-                title: "Environmental context",
-                body: "Automatic weather station data - temperature, wind, pressure - fused alongside engineering telemetry for decision context.",
               },
             ].map((f, i) => (
               <motion.div

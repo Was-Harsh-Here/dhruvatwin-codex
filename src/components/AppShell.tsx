@@ -11,7 +11,11 @@ import {
 import {
   Activity,
   AlertTriangle,
+  Box,
+  Layers,
+  PenSquare,
   Radio,
+  Shield,
   Snowflake,
   LogOut,
   Menu,
@@ -56,6 +60,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navItems = [
     { to: "/dashboard", label: "Sensor Dashboard", icon: Activity, end: true },
     { to: "/alerts", label: "Alert Triage", icon: AlertTriangle },
+    { to: "/twin", label: "Digital Twin 3D", icon: Box },
+    { to: "/catalog", label: "Equipment Catalog", icon: Layers },
+    { to: "/workspace", label: "Workspace", icon: PenSquare },
+    { to: "/admin", label: "Admin Console", icon: Shield },
   ];
 
   return (
@@ -73,7 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="leading-tight">
             <div className="font-display text-sm font-bold tracking-wide text-foreground">
-              {PROJECT_IDENTITY.name}
+              {PROJECT_IDENTITY.name} Platform
             </div>
             <div className="cc-label">Team {PROJECT_IDENTITY.team}</div>
           </div>
@@ -99,27 +107,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="truncate">{label}</span>
             </NavLink>
           ))}
-          <div className="cc-label px-2 pb-2 pt-5">Modules</div>
-          <div className="space-y-1 px-3">
-            {[
-              "Digital Twin 3D",
-              "Microgrid Command",
-              "NCPOR Library",
-              "NPDC Compliance",
-            ].map((label) => (
-              <div
-                key={label}
-                className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-muted-foreground/60"
-                title="Planned for a later DhruvaTwin release"
-              >
-                <span className="truncate">{label}</span>
-                <Badge variant="outline" className="ml-2 shrink-0 text-[10px] uppercase">
-                  Later
-                </Badge>
-                <span className="sr-only">Planned for a later DhruvaTwin release</span>
-              </div>
-            ))}
-          </div>
         </nav>
         <Separator />
         <div className="px-5 py-4">

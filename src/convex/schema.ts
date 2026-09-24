@@ -104,6 +104,38 @@ const schema = defineSchema(
     /**
      * Alerts raised by threshold evaluation or manual operator reports.
      */
+    /**
+     * Operator-authored content: field observations, maintenance logs and
+     * questions attached to a station's equipment. Comments attach to notes.
+     */
+    stationNotes: defineTable({
+      authorId: v.id("users"),
+      stationId: v.id("stations"),
+      equipmentId: v.string(),
+      sensorId: v.optional(v.string()),
+      title: v.string(),
+      body: v.string(),
+      kind: v.union(
+        v.literal("observation"),
+        v.literal("maintenance"),
+        v.literal("question"),
+      ),
+      status: v.union(v.literal("published"), v.literal("removed")),
+      createdAt: v.number(),
+    })
+      .index("by_station_created", ["stationId", "createdAt"])
+      .index("by_equipment", ["stationId", "equipmentId"])
+      .index("by_author", ["authorId", "createdAt"]),
+
+    /** Threaded comments on station notes. */
+    noteComments: defineTable({
+      noteId: v.id("stationNotes"),
+      authorId: v.id("users"),
+      body: v.string(),
+      status: v.union(v.literal("published"), v.literal("removed")),
+      createdAt: v.number(),
+    }).index("by_note", ["noteId", "createdAt"]),
+
     alerts: defineTable({
       stationId: v.id("stations"),
       subsystem: v.string(),
