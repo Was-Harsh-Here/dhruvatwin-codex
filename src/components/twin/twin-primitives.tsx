@@ -1,10 +1,10 @@
-import { ContactShadows, Html, OrbitControls } from "@react-three/drei";
+import { ContactShadows, OrbitControls } from "@react-three/drei";
 
 import type { SensorSummary } from "./types";
 
 export type { SensorSummary, TwinHotspotDef, TwinSceneProps } from "./types";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 /* ------------------------------------------------------------------ */
@@ -361,6 +361,152 @@ export function TwinCanvas({
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* In-canvas labels                                                    */
+/* ------------------------------------------------------------------ */
+
+/** One line of an in-canvas label. */
+export interface LabelRow {
+  text: string;
+  color?: string;
+}
+
+const LABEL_FONT = '600 34px "JetBrains Mono", ui-monospace, monospace';
+
+/**
+ * Draw a label to an offscreen canvas and upload it as a texture.
+ *
+ * Labels are drawn inside the WebGL scene as camera-facing sprites rather
+ * than React DOM portals overlaid on the canvas. Overlay portals inside a
+ * canvas are fragile: under StrictMode, or when a conditional label group is
+ * unmounted, the portal teardown can remove a DOM node React still owns and
+ * the commit throws NotFoundError on removeChild. Sprites have no DOM, so the
+ * whole failure mode disappears and labels still scale with perspective.
+ */
+function labelTexture(rows: LabelRow[], border: string) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  const lines = rows.length > 0 ? rows : [{ text: " ", color: "#E8EEF4" }];
+  const padding = 16;
+  const lineHeight = 46;
+  if (!ctx) {
+    return { texture: new THREE.Texture(), width: 1, height: 1 };
+  }
+  ctx.font = LABEL_FONT;
+  const textWidth = Math.max(
+    ...lines.map((line) => ctx.measureText(line.text).width),
+    24,
+  );
+  const width = Math.ceil(textWidth + padding * 2);
+  const height = Math.ceil(lines.length * lineHeight + padding * 2);
+  canvas.width = width;
+  canvas.height = height;
+
+  ctx.font = LABEL_FONT;
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "rgba(6, 11, 20, 0.92)";
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = border;
+  ctx.lineWidth = 4;
+  ctx.strokeRect(2, 2, width - 4, height - 4);
+  lines.forEach((line, i) => {
+    ctx.fillStyle = line.color ?? "#E8EEF4";
+    ctx.fillText(line.text, padding, padding + i * lineHeight);
+  });
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return { texture, width, height };
+}
+
+/**
+ * Camera-facing label rendered entirely inside the 3D scene.
+ * `px` is the world size of one texture pixel, which sets how large the label
+ * reads at a given camera distance.
+ */
+export function Label3D({
+  position,
+  rows,
+  border = TWIN_COLORS.cyan,
+  px = 0.18,
+  renderOrder = 12,
+}: {
+  position: [number, number, number];
+  rows: LabelRow[];
+  border?: string;
+  px?: number;
+  renderOrder?: number;
+}) {
+  const key = rows.map((row) => `${row.text}:${row.color ?? ""}`).join("|");
+  const { texture, width, height } = useMemo(
+    () => labelTexture(rows, border),
+    // The row key captures every visual input of the texture.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key, border],
+  );
+
+  useEffect(() => () => texture.dispose(), [texture]);
+
+  return (
+    <sprite
+      position={position}
+      scale={[width * px, height * px, 1]}
+      renderOrder={renderOrder}
+    >
+      <spriteMaterial
+        map={texture}
+        transparent
+        depthTest={false}
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </sprite>
+  );
+}
+
+/** Colour for a reading status, matching the console palette. */
+export function statusTone(status: string): string {
+  switch (status) {
+    case "critical":
+      return TWIN_COLORS.red;
+    case "warning":
+      return TWIN_COLORS.amber;
+    case "nominal":
+      return TWIN_COLORS.green;
+    case "watch":
+      return "#4A9EFF";
+    default:
+      return "#6B7A8F";
+  }
+}
+
+/** Live telemetry readout drawn above a station. */
+export function TelemetryStrip({
+  position,
+  tags,
+  readings,
+  px = 0.2,
+  border = TWIN_COLORS.cyan,
+}: {
+  position: [number, number, number];
+  tags: string[];
+  readings: SensorSummary[];
+  px?: number;
+  border?: string;
+}) {
+  const rows: LabelRow[] = tags.map((tag) => {
+    const reading = readings.find((r) => r.equipmentId === tag);
+    if (!reading) return { text: `${tag}  --`, color: "#6B7A8F" };
+    return {
+      text: `${tag}  ${reading.value.toFixed(reading.decimals)}${reading.unit}`,
+      color: statusTone(reading.status),
+    };
+  });
+  return <Label3D position={position} rows={rows} border={border} px={px} />;
+}
+
 /**
  * Thermal-mode readout labels pinned to subsystems. Each label shows the live
  * value and parameter for one equipment tag so the thermal view carries
@@ -378,31 +524,22 @@ export function ThermalReadout({
       {targets.map((target) => {
         const reading = readings.find((r) => r.equipmentId === target.tag);
         if (!reading) return null;
-        const color =
-          reading.status === "critical"
-            ? "#FF3B47"
-            : reading.status === "warning"
-              ? "#FFB020"
-              : "#FF8A1F";
+        const color = statusTone(reading.status);
         return (
-          <Html
+          <Label3D
             key={target.tag}
             position={target.position}
-            center
-            distanceFactor={155}
-          >
-            <div
-              className="pointer-events-none whitespace-nowrap rounded border px-2 py-1 text-center font-mono text-[10px] leading-tight backdrop-blur"
-              style={{ color, borderColor: `${color}80`, background: "#060B14E6" }}
-            >
-              <div className="font-bold">{target.tag}</div>
-              <div>
-                {reading.value.toFixed(reading.decimals)}
-                {reading.unit}
-              </div>
-              <div style={{ color: "#6B7A8F" }}>{reading.parameter}</div>
-            </div>
-          </Html>
+            border={color}
+            px={0.16}
+            rows={[
+              { text: target.tag, color },
+              {
+                text: `${reading.value.toFixed(reading.decimals)}${reading.unit}`,
+                color,
+              },
+              { text: reading.parameter, color: "#6B7A8F" },
+            ]}
+          />
         );
       })}
     </group>

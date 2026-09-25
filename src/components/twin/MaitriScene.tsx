@@ -1,4 +1,3 @@
-import { Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -10,6 +9,7 @@ import {
   MAT,
   Snowfall,
   Stars,
+  TelemetryStrip,
   Terrain,
   ThermalReadout,
   TWIN_COLORS,
@@ -554,8 +554,6 @@ export function MaitriScene({
   activeHotspot,
   viewMode = "exterior",
 }: TwinSceneProps) {
-  const find = (tag: string) => readings.find((r) => r.equipmentId === tag);
-
   return (
     <group>
       <Terrain
@@ -620,25 +618,12 @@ export function MaitriScene({
       <Hotspot position={[62, 7, 18]} label="vehicle-fleet" onSelect={onSelect} active={activeHotspot === "vehicle-fleet"} />
       <Hotspot position={[74, 8, -30]} label="helipad" onSelect={onSelect} active={activeHotspot === "helipad"} />
 
-      {/* Live telemetry readout strip above the main station */}
-      <group position={[0, 15.5, 0]}>
-        <Html center distanceFactor={120}>
-          <div className="pointer-events-none flex gap-2 rounded border border-[#00E0C6]/50 bg-[#060B14]/85 px-2.5 py-1.5 font-mono text-[10px] text-[#E8EEF4] shadow-none">
-            {(["GEN-1", "PIPE-MAITRI", "AWS-MAITRI"] as const).map((tag) => {
-              const r = find(tag);
-              if (!r) return null;
-              const color =
-                r.status === "critical" ? "#FF3B47" : r.status === "warning" ? "#FFB020" : "#3EE07F";
-              return (
-                <span key={tag} style={{ color }} className="whitespace-nowrap">
-                  {tag} {r.value.toFixed(r.decimals)}
-                  {r.unit}
-                </span>
-              );
-            })}
-          </div>
-        </Html>
-      </group>
+      {/* Live telemetry readout above the main station, drawn in-canvas */}
+      <TelemetryStrip
+        position={[0, 16, 0]}
+        tags={["GEN-1", "PIPE-MAITRI", "AWS-MAITRI"]}
+        readings={readings}
+      />
 
       <ViewModeEffect mode={viewMode} />
     </group>

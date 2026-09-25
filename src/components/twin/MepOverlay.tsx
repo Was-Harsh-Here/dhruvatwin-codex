@@ -1,5 +1,5 @@
-import { Html } from "@react-three/drei";
 import * as THREE from "three";
+import { Label3D } from "./twin-primitives";
 
 /**
  * MEP / HVAC overlay.
@@ -101,23 +101,13 @@ export function MepOverlay({
         <Node key={`n${i}`} {...node} />
       ))}
       {labels.map((label) => (
-        <Html
+        <Label3D
           key={label.text}
           position={label.position}
-          center
-          distanceFactor={130}
-        >
-          <div
-            className="pointer-events-none whitespace-nowrap rounded border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider"
-            style={{
-              color: MEP_COLORS[label.kind],
-              borderColor: `${MEP_COLORS[label.kind]}80`,
-              background: "#060B14E6",
-            }}
-          >
-            {label.text}
-          </div>
-        </Html>
+          border={MEP_COLORS[label.kind]}
+          px={0.18}
+          rows={[{ text: label.text.toUpperCase(), color: MEP_COLORS[label.kind] }]}
+        />
       ))}
     </group>
   );

@@ -1,4 +1,3 @@
-import { Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -10,6 +9,8 @@ import {
   MAT,
   Snowfall,
   Stars,
+  Label3D,
+  TelemetryStrip,
   Terrain,
   ThermalReadout,
   TWIN_COLORS,
@@ -380,11 +381,12 @@ function NeighbourMarker({
         <octahedronGeometry args={[0.9]} />
         <meshStandardMaterial color={TWIN_COLORS.amber} emissive={TWIN_COLORS.amber} emissiveIntensity={0.8} />
       </mesh>
-      <Html center distanceFactor={160}>
-        <div className="pointer-events-none whitespace-nowrap rounded border border-[#FFB020]/50 bg-[#060B14]/85 px-2 py-0.5 font-mono text-[10px] text-[#FFB020]">
-          {name}
-        </div>
-      </Html>
+      <Label3D
+        position={[0, 8.6, 0]}
+        border={TWIN_COLORS.amber}
+        px={0.2}
+        rows={[{ text: name, color: TWIN_COLORS.amber }]}
+      />
     </group>
   );
 }
@@ -542,8 +544,6 @@ export function BharatiScene({
   activeHotspot,
   viewMode = "exterior",
 }: TwinSceneProps) {
-  const find = (tag: string) => readings.find((r) => r.equipmentId === tag);
-
   return (
     <group>
       <Terrain
@@ -600,25 +600,12 @@ export function BharatiScene({
       <Hotspot position={[-80, 8, 16]} label="vehicle-fleet" onSelect={onSelect} active={activeHotspot === "vehicle-fleet"} />
       <Hotspot position={[-74, 8, -34]} label="helipad" onSelect={onSelect} active={activeHotspot === "helipad"} />
 
-      {/* Live telemetry readout strip above the station */}
-      <group position={[0, 16.5, 10]}>
-        <Html center distanceFactor={130}>
-          <div className="pointer-events-none flex gap-2 rounded border border-[#00E0C6]/50 bg-[#060B14]/85 px-2.5 py-1.5 font-mono text-[10px] text-[#E8EEF4]">
-            {(["CHP-1", "CHP-2", "SWPUMP-BHARATI", "AWS-BHARATI"] as const).map((tag) => {
-              const r = find(tag);
-              if (!r) return null;
-              const color =
-                r.status === "critical" ? "#FF3B47" : r.status === "warning" ? "#FFB020" : "#3EE07F";
-              return (
-                <span key={tag} style={{ color }} className="whitespace-nowrap">
-                  {tag} {r.value.toFixed(r.decimals)}
-                  {r.unit}
-                </span>
-              );
-            })}
-          </div>
-        </Html>
-      </group>
+      {/* Live telemetry readout above the station, drawn in-canvas */}
+      <TelemetryStrip
+        position={[0, 17, 10]}
+        tags={["CHP-1", "CHP-2", "SWPUMP-BHARATI", "AWS-BHARATI"]}
+        readings={readings}
+      />
 
       <ViewModeEffect mode={viewMode} />
     </group>

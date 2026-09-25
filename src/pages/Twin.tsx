@@ -25,7 +25,7 @@ import {
   type StationSlug,
 } from "@/lib/station";
 import { Box, Cpu, Layers, Loader2, Radio, Satellite, TriangleAlert } from "lucide-react";
-import { Suspense, useMemo, useState } from "react";
+import { Component, Suspense, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { cn } from "@/lib/utils";
 
@@ -123,6 +123,29 @@ const HOTSPOT_INFO: Record<string, { name: string; info: string; equipmentId?: s
       "Rotorcraft apron with approach markings and perimeter lighting, used for medical evacuation and remote field party support.",
   },
 };
+
+/**
+ * Error boundary for the WebGL scene tree.
+ *
+ * The renderer inside <Canvas> is its own React root, so a fault there is not
+ * caught by the app-level boundary and would otherwise take the whole preview
+ * down. Failing quiet keeps the command panels usable.
+ */
+class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("[Twin] 3D scene error, falling back to panels only:", error);
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
 
 /** Digital Twin 3D view for the selected station. */
 export default function Twin() {
@@ -232,24 +255,26 @@ export default function Twin() {
                 />
               ) : (
                 <TwinCanvas>
-                  <Suspense fallback={null}>
-                    {slug === "maitri" ? (
-                      <MaitriScene
-                        readings={readings}
-                        onSelect={setActive}
-                        activeHotspot={active}
-                        viewMode={viewMode}
-                      />
-                    ) : (
-                      <BharatiScene
-                        readings={readings}
-                        onSelect={setActive}
-                        activeHotspot={active}
-                        viewMode={viewMode}
-                      />
-                    )}
-                    <CameraRig preset={preset} presets={PRESETS} />
-                  </Suspense>
+                  <SceneBoundary>
+                    <Suspense fallback={null}>
+                      {slug === "maitri" ? (
+                        <MaitriScene
+                          readings={readings}
+                          onSelect={setActive}
+                          activeHotspot={active}
+                          viewMode={viewMode}
+                        />
+                      ) : (
+                        <BharatiScene
+                          readings={readings}
+                          onSelect={setActive}
+                          activeHotspot={active}
+                          viewMode={viewMode}
+                        />
+                      )}
+                      <CameraRig preset={preset} presets={PRESETS} />
+                    </Suspense>
+                  </SceneBoundary>
                 </TwinCanvas>
               )}
 
