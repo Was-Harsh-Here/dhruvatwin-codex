@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { SensorSummary } from "./types";
+import { floorPlan } from "./interiors/plans";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,27 +32,130 @@ export interface RoomDef {
 
 const TILE = 46;
 
-const MAITRI_ROOMS: RoomDef[] = [
-  { id: "ops", hotspot: "main-station", label: "Operations", x: 0, y: 0, w: 4, h: 3, height: 54, equipmentId: "HAB-MAITRI", occupancy: 6 },
-  { id: "hab", hotspot: "main-station", label: "Habitation", x: 4, y: 0, w: 4, h: 3, height: 54, equipmentId: "HAB-MAITRI", occupancy: 12 },
-  { id: "galley", hotspot: "main-station", label: "Galley", x: 8, y: 0, w: 4, h: 3, height: 54, equipmentId: "HAB-MAITRI", occupancy: 8 },
-  { id: "med", hotspot: "main-station", label: "Medical", x: 0, y: 3, w: 3, h: 2, height: 40, equipmentId: "HAB-MAITRI", occupancy: 2 },
-  { id: "plant", hotspot: "generators", label: "Generator Bay", x: 0, y: 5, w: 5, h: 3, height: 72, equipmentId: "GEN-1", occupancy: 3 },
-  { id: "water", hotspot: "pipeline", label: "Water Plant", x: 5, y: 5, w: 4, h: 3, height: 72, equipmentId: "PIPE-MAITRI", occupancy: 2 },
-  { id: "lab", hotspot: "main-station", label: "Science Lab", x: 8, y: 3, w: 4, h: 3, height: 40, equipmentId: "HAB-MAITRI", occupancy: 7 },
-  { id: "stores", hotspot: "fuel", label: "Stores", x: 12, y: 0, w: 3, h: 8, height: 64, equipmentId: "FUEL-MAITRI", occupancy: 3 },
-];
+/** Tile size, in pixels, for one metre of plan at the chosen scale. */
+const ISO_SCALE: Record<string, number> = { maitri: 0.42, bharati: 0.3 };
 
-const BHARATI_ROOMS: RoomDef[] = [
-  { id: "ops", hotspot: "main-station", label: "Operations", x: 0, y: 0, w: 5, h: 4, height: 96, equipmentId: "HAB-BHARATI", occupancy: 8 },
-  { id: "hab", hotspot: "main-station", label: "Habitation", x: 5, y: 0, w: 5, h: 4, height: 96, equipmentId: "HAB-BHARATI", occupancy: 30 },
-  { id: "med", hotspot: "main-station", label: "Medical", x: 10, y: 0, w: 3, h: 4, height: 96, equipmentId: "HAB-BHARATI", occupancy: 4 },
-  { id: "lab", hotspot: "laboratory", label: "Laboratory", x: 13, y: 0, w: 3, h: 4, height: 96, equipmentId: "HAB-BHARATI", occupancy: 9 },
-  { id: "chp", hotspot: "chp", label: "CHP Hall", x: 0, y: 4, w: 5, h: 4, height: 88, equipmentId: "CHP-1", occupancy: 5 },
-  { id: "sw", hotspot: "seawater", label: "Seawater Plant", x: 5, y: 4, w: 4, h: 4, height: 88, equipmentId: "SWPUMP-BHARATI", occupancy: 3 },
-  { id: "ww", hotspot: "wastewater", label: "Wastewater", x: 9, y: 4, w: 4, h: 4, height: 66, equipmentId: "SWPUMP-BHARATI", occupancy: 2 },
-  { id: "stores", hotspot: "fuel", label: "Stores & Fuel", x: 0, y: 8, w: 7, h: 3, height: 80, equipmentId: "FUEL-BHARATI", occupancy: 6 },
-];
+/** Tiles of separation between the two stacked decks. */
+const DECK_GAP = 2.4;
+
+/** Equipment tag whose live reading is shown on a block, by room kind. */
+function equipmentFor(slug: "maitri" | "bharati", kind: string): string | undefined {
+  const south = slug === "maitri";
+  switch (kind) {
+    case "command":
+      return south ? "HAB-MAITRI" : "HAB-BHARATI";
+    case "comms":
+      return south ? "VSAT-MAITRI" : "VSAT-BHARATI";
+    case "server":
+    case "datacentre":
+      return south ? "PDU-MAITRI" : "PDU-BHARATI";
+    case "generator":
+      return "GEN-1";
+    case "power":
+      return "CHP-1";
+    case "water":
+      return south ? "PIPE-MAITRI" : "SWPUMP-BHARATI";
+    case "wastewater":
+      return south ? "HAB-MAITRI" : "SWPUMP-BHARATI";
+    case "storage":
+      return south ? "FUEL-MAITRI" : "FUEL-BHARATI";
+    case "medical":
+      return south ? "HAB-MAITRI" : "HAB-BHARATI";
+    case "laboratory":
+      return south ? "HAB-MAITRI" : "LAB-BHARATI";
+    case "atrium":
+      return south ? "HAB-MAITRI" : "HAB-BHARATI";
+    default:
+      // Living deck rooms carry comfort channels rather than plant channels.
+      return south ? "HAB-MAITRI" : "HAB-BHARATI";
+  }
+}
+
+/** Hotspot the block selects when clicked, matching the 3D scene markers. */
+function hotspotFor(kind: string): string {
+  switch (kind) {
+    case "generator":
+      return "generators";
+    case "power":
+      return "chp";
+    case "water":
+      return "pipeline";
+    case "laboratory":
+      return "laboratory";
+    case "wastewater":
+      return "wastewater";
+    case "storage":
+      return "fuel";
+    default:
+      return "main-station";
+  }
+}
+
+interface IsoDeck {
+  name: string;
+  top: number;
+}
+
+interface IsoPlan {
+  rooms: RoomDef[];
+  decks: IsoDeck[];
+  gridW: number;
+  gridH: number;
+}
+
+/**
+ * Build the isometric room blocks from the same floor plans the walkable
+ * interior uses, so the cutaway and the first-person decks describe one
+ * station rather than two different drawings.
+ */
+function buildIsoRooms(slug: "maitri" | "bharati"): IsoPlan {
+  const scale = ISO_SCALE[slug] ?? 0.42;
+  const rooms: RoomDef[] = [];
+  const decks: IsoDeck[] = [];
+  let cursor = 0;
+
+  for (const deck of [0, 1]) {
+    const plan = floorPlan(slug, deck);
+    if (!plan) continue;
+    decks.push({ name: plan.name, top: cursor });
+    const toX = (x: number) => (x + plan.shell.w / 2) * scale;
+    const toY = (z: number) => cursor + (z + plan.shell.d / 2) * scale;
+
+    // Corridor slab first, so room blocks draw over it.
+    rooms.push({
+      id: `${deck}-corridor`,
+      hotspot: "main-station",
+      label: `${plan.name} circulation`,
+      x: toX(plan.corridor.x - plan.corridor.w / 2),
+      y: toY(plan.corridor.z - plan.corridor.d / 2),
+      w: plan.corridor.w * scale,
+      h: plan.corridor.d * scale,
+      height: 20,
+      occupancy: 0,
+    });
+
+    for (const room of plan.rooms) {
+      rooms.push({
+        id: `${deck}-${room.id}`,
+        hotspot: hotspotFor(room.kind),
+        label: room.name,
+        x: toX(room.x - room.w / 2),
+        y: toY(room.z - room.d / 2),
+        w: room.w * scale,
+        h: room.d * scale,
+        height: Math.round(26 + Math.min(room.w, room.d) * 2.2 + deck * 8),
+        equipmentId: equipmentFor(slug, room.kind),
+        occupancy: room.occupancy ?? 0,
+      });
+    }
+
+    cursor += plan.shell.d * scale + DECK_GAP;
+  }
+
+  const gridW = Math.max(...rooms.map((r) => (r.x + r.w) * TILE));
+  const gridH = Math.max(...rooms.map((r) => (r.y + r.h) * TILE));
+  return { rooms, decks, gridW, gridH };
+}
 
 const STATUS_FILL: Record<string, { top: string; wall: string; text: string }> = {
   nominal: { top: "#123244", wall: "#0B2130", text: "#3EE07F" },
@@ -186,9 +290,8 @@ export function TwoAndHalfD({
   onSelect: (hotspot: string) => void;
   activeHotspot: string | null;
 }) {
-  const rooms = slug === "maitri" ? MAITRI_ROOMS : BHARATI_ROOMS;
-  const gridW = Math.max(...rooms.map((r) => r.x + r.w)) * TILE;
-  const gridH = Math.max(...rooms.map((r) => r.y + r.h)) * TILE;
+  const iso = useMemo(() => buildIsoRooms(slug), [slug]);
+  const { rooms, gridW, gridH } = iso;
 
   const byEquipment = useMemo(() => {
     const map = new Map<string, SensorSummary>();
@@ -261,6 +364,15 @@ export function TwoAndHalfD({
               border: "1px solid #00E0C655",
             }}
           />
+          {iso.decks.map((deck) => (
+            <div
+              key={deck.name}
+              className="absolute left-0"
+              style={{ top: deck.top * TILE - 18 }}
+            >
+              <span className="cc-label text-[9px] text-[#4A9EFF]">{deck.name}</span>
+            </div>
+          ))}
           {rooms.map((room) => (
             <RoomBlock
               key={room.id}

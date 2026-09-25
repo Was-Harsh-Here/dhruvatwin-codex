@@ -3,6 +3,7 @@ import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import {
   Aurora,
+  BuildingEntrance,
   GroundShadow,
   Hotspot,
   Lighting,
@@ -15,6 +16,8 @@ import {
   TWIN_COLORS,
   type TwinSceneProps,
 } from "./twin-primitives";
+import { WaterBody } from "./water/WaterBody";
+import { WATER_BODIES } from "./water/water-data";
 import { VehicleFleet } from "./VehicleFleet";
 import { MAITRI_MEP, MepOverlay } from "./MepOverlay";
 import { ViewModeEffect, modeLighting } from "./view-modes";
@@ -108,59 +111,6 @@ function AntennaMast() {
   );
 }
 
-/** Lake Priyadarshini with animated water and floating ice floes. */
-function LakePriyadarshini() {
-  const waterRef = useRef<THREE.Mesh>(null);
-  useFrame(({ clock }) => {
-    if (waterRef.current) {
-      const mat = waterRef.current.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = 0.28 + Math.sin(clock.elapsedTime * 1.1) * 0.08;
-      waterRef.current.position.y = 0.32 + Math.sin(clock.elapsedTime * 0.8) * 0.04;
-    }
-  });
-  const floes = useMemo(
-    () =>
-      [
-        [-9, 2],
-        [5, -4],
-        [11, 3],
-      ].map(([x, z], i) => ({
-        x,
-        z,
-        r: 1.6 + i * 0.5,
-        rot: i * 1.7,
-      })),
-    [],
-  );
-  return (
-    <group position={[-38, 0, 26]}>
-      {/* Ice rim */}
-      <mesh position={[0, 0.22, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[26, 32]} />
-        <meshStandardMaterial color={TWIN_COLORS.ice} {...MAT.snow} />
-      </mesh>
-      {/* Water */}
-      <mesh ref={waterRef} position={[0, 0.32, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[24, 32]} />
-        <meshStandardMaterial
-          color={TWIN_COLORS.water}
-          emissive={TWIN_COLORS.cyan}
-          emissiveIntensity={0.3}
-          roughness={0.15}
-          metalness={0.1}
-        />
-      </mesh>
-      {/* Floating ice floes */}
-      {floes.map((f, i) => (
-        <mesh key={i} position={[f.x, 0.42, f.z]} rotation={[0, f.rot, 0]}>
-          <cylinderGeometry args={[f.r, f.r * 0.85, 0.35, 7]} />
-          <meshStandardMaterial color="#E8F1F6" {...MAT.snow} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
 /** Heated water pipeline from the lake to the station with pulsing flow glow. */
 function HeatedPipeline() {
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
@@ -169,8 +119,9 @@ function HeatedPipeline() {
       matRef.current.emissiveIntensity = 0.7 + Math.sin(clock.elapsedTime * 2.4) * 0.45;
     }
   });
-  const start: [number, number, number] = [-26, 1.1, 22];
-  const end: [number, number, number] = [-12, 1.1, 6];
+  // Runs from the Lake Priyadarshini shoreline to the station west wall.
+  const start: [number, number, number] = [-18, 1.1, 34];
+  const end: [number, number, number] = [-20, 1.1, 9];
   const mid = [(start[0] + end[0]) / 2, 1.1, (start[2] + end[2]) / 2] as [number, number, number];
   const angle = Math.atan2(end[0] - start[0], end[2] - start[2]);
   const length = Math.hypot(end[0] - start[0], end[2] - start[2]);
@@ -241,7 +192,7 @@ function PumpHouse() {
     if (rotor.current) rotor.current.rotation.y += delta * 3;
   });
   return (
-    <group position={[-22, 0, 34]}>
+    <group position={[-12, 0, 36]}>
       <mesh position={[0, 1.5, 0]}>
         <boxGeometry args={[6, 3, 4]} />
         <meshStandardMaterial color={TWIN_COLORS.steelWhite} {...MAT.metal} />
@@ -553,7 +504,16 @@ export function MaitriScene({
   onSelect,
   activeHotspot,
   viewMode = "exterior",
+  sun,
+  onWaterSelect,
+  activeWater,
+  submergedWater,
+  trackedWater,
+  onVehicleSelect,
+  activeVehicle,
+  onEnterBuilding,
 }: TwinSceneProps) {
+  const lake = WATER_BODIES.priyadarshini;
   return (
     <group>
       <Terrain
@@ -565,14 +525,29 @@ export function MaitriScene({
           { x: 300, z: 240, r: 170, h: 5 },
         ]}
       />
-      <Lighting {...modeLighting(viewMode)} />
+      <Lighting
+        {...modeLighting(viewMode)}
+        sunPosition={sun?.position ?? [120, 140, 60]}
+        night={Boolean(sun?.night)}
+      />
       <Stars count={800} />
-      <Aurora z={-240} />
+      <Aurora z={-240} opacity={sun?.auroraOpacity ?? 0.32} />
       <Snowfall count={5000} spread={320} />
       <GroundShadow />
 
       <MainStation onInfo={() => onSelect("main-station")} />
-      <LakePriyadarshini />
+      <WaterBody
+        def={lake}
+        onSelect={onWaterSelect}
+        active={activeWater === lake.id}
+        submerged={submergedWater === lake.id}
+        trackers={trackedWater === lake.id}
+      />
+      <BuildingEntrance
+        position={[0, 3.9, 10.5]}
+        label="Maitri main airlock"
+        onEnter={() => onEnterBuilding?.()}
+      />
       <HeatedPipeline />
       <FuelFarm />
       <PumpHouse />
@@ -588,7 +563,11 @@ export function MaitriScene({
       <Incinerator />
       <BalloonShed />
       <Sastrugi />
-      <VehicleFleet station="maitri" />
+      <VehicleFleet
+        station="maitri"
+        onSelect={onVehicleSelect}
+        activeVehicle={activeVehicle ?? null}
+      />
 
       {viewMode === "mep" && <MepOverlay {...MAITRI_MEP} />}
       {viewMode === "thermal" && (
@@ -609,8 +588,8 @@ export function MaitriScene({
 
       {/* Hotspots */}
       <Hotspot position={[0, 12, 0]} label="main-station" onSelect={onSelect} active={activeHotspot === "main-station"} />
-      <Hotspot position={[-38, 7, 26]} label="lake" onSelect={onSelect} active={activeHotspot === "lake"} />
-      <Hotspot position={[-19, 5, 14]} label="pipeline" onSelect={onSelect} active={activeHotspot === "pipeline"} />
+      <Hotspot position={[-58, 7, 36]} label="lake" onSelect={onSelect} active={activeHotspot === "lake"} />
+      <Hotspot position={[-19, 5, 22]} label="pipeline" onSelect={onSelect} active={activeHotspot === "pipeline"} />
       <Hotspot position={[42, 12, 30]} label="fuel" onSelect={onSelect} active={activeHotspot === "fuel"} />
       <Hotspot position={[16, 7, -26]} label="generators" onSelect={onSelect} active={activeHotspot === "generators"} />
       <Hotspot position={[-8, 19, -30]} label="weather" onSelect={onSelect} active={activeHotspot === "weather"} />

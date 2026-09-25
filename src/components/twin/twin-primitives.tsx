@@ -120,7 +120,16 @@ export function Stars({ count = 500, radius = 320 }: { count?: number; radius?: 
 }
 
 /** Animated aurora ribbons across the southern sky. */
-export function Aurora({ z = -160, scale = 1 }: { z?: number; scale?: number }) {
+export function Aurora({
+  z = -160,
+  scale = 1,
+  opacity = 0.32,
+}: {
+  z?: number;
+  scale?: number;
+  /** Season-driven brightness: absent under the summer sun, strong in winter. */
+  opacity?: number;
+}) {
   const ref = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
@@ -140,7 +149,7 @@ export function Aurora({ z = -160, scale = 1 }: { z?: number; scale?: number }) 
             emissive={i === 1 ? "#3EE07F" : "#00E0C6"}
             emissiveIntensity={0.9}
             transparent
-            opacity={0.32}
+            opacity={opacity}
             side={THREE.DoubleSide}
             depthWrite={false}
           />
@@ -273,19 +282,148 @@ export function Lighting({
   sun = 1.2,
   hemi = 0.4,
   ambient = 0.15,
+  sunPosition = [120, 140, 60],
+  night = false,
 }: {
   sun?: number;
   hemi?: number;
   ambient?: number;
+  /** Direction of the sun for the selected time of day. */
+  sunPosition?: [number, number, number];
+  /** Night raises the apron floodlights. */
+  night?: boolean;
 }) {
   return (
     <>
-      <directionalLight position={[120, 140, 60]} intensity={sun} color="#E8F4FF" />
-      <hemisphereLight args={["#1A2A44", "#4A3E30", hemi]} />
+      <directionalLight
+        position={sunPosition}
+        intensity={sun}
+        color={night ? "#8FB4E0" : "#E8F4FF"}
+      />
+      <hemisphereLight args={[night ? "#0C1626" : "#1A2A44", "#4A3E30", hemi]} />
+      {night && <Floodlights />}
       <pointLight position={[0, 12, 0]} intensity={40} distance={40} color="#FFB366" />
       <pointLight position={[-60, 8, 40]} intensity={25} distance={50} color={TWIN_COLORS.cyan} />
       <ambientLight intensity={ambient} />
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Night floodlights and building access                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Station apron floodlights.
+ *
+ * Mounted only for the polar night, so the light count is stable through the
+ * day. They carry no shadows because the sun already does.
+ */
+export function Floodlights({ intensity = 55 }: { intensity?: number }) {
+  const posts: Array<[number, number, number]> = [
+    [42, 9, 42],
+    [-42, 9, 42],
+    [42, 9, -42],
+    [-42, 9, -42],
+  ];
+  return (
+    <group>
+      {posts.map((p, i) => (
+        <group key={i} position={p}>
+          <mesh position={[0, -p[1] / 2, 0]}>
+            <cylinderGeometry args={[0.18, 0.26, p[1], 8]} />
+            <meshStandardMaterial color={TWIN_COLORS.pole} metalness={0.7} roughness={0.35} />
+          </mesh>
+          <mesh rotation={[0.5, i * 1.6, 0]}>
+            <boxGeometry args={[1.1, 0.3, 0.7]} />
+            <meshStandardMaterial color="#B9C4CC" metalness={0.7} roughness={0.3} />
+          </mesh>
+          <mesh position={[0, -0.1, 0.3]} rotation={[0.5, 0, 0]}>
+            <planeGeometry args={[0.9, 0.4]} />
+            <meshStandardMaterial color="#FFE6C0" emissive="#FFE6C0" emissiveIntensity={1.6} />
+          </mesh>
+          <pointLight
+            position={[0, -0.4, 0.8]}
+            intensity={intensity}
+            distance={90}
+            decay={2}
+            color="#FFE6C0"
+          />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/**
+ * Building entrance marker.
+ *
+ * A lit airlock frame with a hover label. Clicking it leaves the exterior view
+ * and puts the operator inside the station in walk mode, which is the only
+ * entry point to the interior rooms.
+ */
+export function BuildingEntrance({
+  position,
+  rotation = [0, 0, 0],
+  label,
+  onEnter,
+}: {
+  position: [number, number, number];
+  rotation?: [number, number, number];
+  label: string;
+  onEnter: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <group
+      position={position}
+      rotation={rotation}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        setHovered(true);
+        document.body.style.cursor = "pointer";
+      }}
+      onPointerOut={() => {
+        setHovered(false);
+        document.body.style.cursor = "auto";
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onEnter();
+      }}
+    >
+      <mesh>
+        <planeGeometry args={[3.2, 4.2]} />
+        <meshStandardMaterial
+          color={TWIN_COLORS.amber}
+          emissive={TWIN_COLORS.amber}
+          emissiveIntensity={hovered ? 0.9 : 0.35}
+          transparent
+          opacity={0.34}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      <mesh position={[0, -2.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[1.5, 1.9, 28]} />
+        <meshStandardMaterial
+          color={TWIN_COLORS.amber}
+          emissive={TWIN_COLORS.amber}
+          emissiveIntensity={hovered ? 1.2 : 0.5}
+          transparent
+          opacity={0.7}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      <Label3D
+        position={[0, 2.9, 0]}
+        border={TWIN_COLORS.amber}
+        px={0.13}
+        rows={[
+          { text: label, color: TWIN_COLORS.amber },
+          { text: hovered ? "CLICK TO ENTER" : "INTERIOR ACCESS", color: "#E8EEF4" },
+        ]}
+      />
+    </group>
   );
 }
 
@@ -341,17 +479,22 @@ export function TwinCanvas({
   fogColor = "#0B1622",
   fogNear = 180,
   fogFar = 420,
+  cameraPosition = [150, 95, 150],
+  cameraNear = 0.5,
 }: {
   children: React.ReactNode;
   fogColor?: string;
   fogNear?: number;
   fogFar?: number;
+  /** Initial camera placement; the controllers take over from there. */
+  cameraPosition?: [number, number, number];
+  cameraNear?: number;
 }) {
   return (
     <Canvas
       shadows
       dpr={[1, 1.75]}
-      camera={{ position: [150, 95, 150], fov: 42, near: 0.5, far: 900 }}
+      camera={{ position: cameraPosition, fov: 42, near: cameraNear, far: 900 }}
       gl={{ antialias: true }}
     >
       <fog attach="fog" args={[fogColor, fogNear, fogFar]} />

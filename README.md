@@ -29,9 +29,34 @@ Two distinct scenes, not one scene with a parameter switch.
 
 Both scenes carry displaced terrain (800 m and 900 m aprons), an aurora band, star fields (800 and 1,200 points), snow particle systems (5,000 and 6,000 particles) and fog, plus clickable hotspots on every major object and a telemetry readout strip above the station.
 
+### Walkable interiors
+
+The interior is its own world, mounted instead of the exterior scene rather than inside it, so every room can be modelled at walkable detail without paying for it from outside.
+
+- **Maitri** - 9 rooms on the entrance deck and 9 on the upper deck: entrance vestibule with the parka rail and airlock gauges, command centre with six twin-monitor consoles and the Antarctic wall map, communication room with modem rack and radio console, server room with spinning rack fans and an emergency shut-off, generator room with two fully modelled diesel sets (engine block, six injector lines, exhaust manifold, cooling fan, analogue gauges), water treatment with the reverse osmosis plant and UV steriliser, medical bay with beds, X-ray unit and ultrasound, storage with shelving, pallet racking and a folding ladder, plus living quarters with named cabins, dormitories, galley, dining mess, recreation room, gymnasium, bathrooms, laundry and stairway.
+- **Bharati** - 11 rooms on each deck: atrium with skylight and glass-railed stair, command centre with a sixteen-monitor video wall, communication centre, data centre with six operating racks, power room with three CHP units behind the viewing panel, water treatment, wastewater treatment with a bubbling MBBR digester, medical bay, laboratory with four benches, fume hood and microscope, storage, workshop with centre lathe and welding station, plus living quarters with twelve cabin doors, dormitory, galley with walk-in pantry, dining mess, recreation, gymnasium, bathrooms, laundry, sauna with tiered cedar bench and Finnish stove, and the observation lounge.
+
+Every wall, doorway and load-bearing partition is generated from one floor plan, so a gap in a wall exists only where a door was declared. Doors swing open as you approach and close behind you. Every room has a clickable light switch, and every significant object inside a room opens its own detail panel with live telemetry where the object is instrumented.
+
+### Interactive water
+
+Every water body carries the measurements the station acts on and can be clicked for its survey panel.
+
+- **Lake Priyadarshini** - surface temperature, ice thickness at shore and centre, purity, pH, depth, volume, flow to station, trace heating state and days to complete freeze, with a twelve month ice coverage chart.
+- **Thala Fjord** - surface temperature, salinity, ice coverage, iceberg count, mean and maximum depth, wave height, current speed and aurora reflection.
+- **Quilty Bay** - temperature, ice coverage, intake status and flow, post-desalination purity and shore assets.
+- **Seawater intake** - intake depth and temperature, flow, filter state, pipe integrity and the trace heating current and resistance.
+- **44 Larsemann lakelets** - diameter, depth, ice thickness, water temperature, biota, distance from Bharati and last sampling date, with an overlay that ranks them by ice thickness and flags active research sites.
+
+The surface is displaced by three superposed swell components in a custom shader, so wave height and speed come straight from the station data: a 5 cm ripple on the lake, 0.8 m whitecapped swell on the fjord. Every body has an **underwater view** showing seabed relief, boulders, fish, rising bubbles and the submerged intake line, and the fjord and bay carry an **iceberg tracker** with twenty-four hours of drift history and a dashed forecast path.
+
 ### Vehicle fleet
 
-Twelve vehicle classes are modelled and laid out per station: PistenBully tracked snow vehicles, snowmobiles, ATV quad bikes, tracked cargo carriers, a helicopter with animated rotor, Nansen sledges, cargo sledges, snow blowers, forklifts, a mobile crane, the Zodiac boat and utility trailers.
+Twelve vehicle classes are modelled and laid out per station: PistenBully tracked snow vehicles, snowmobiles, ATV quad bikes, tracked cargo carriers, a helicopter with animated rotor, Nansen sledges, cargo sledges, snow blowers, forklifts, a mobile crane, the Zodiac boat and utility trailers. Tracks roll on the running machines, the PistenBully blade breathes through its hydraulic stroke, exhaust particulates rise while an engine runs, and every unit carries a tail number plate in its status colour. Clicking a unit opens its maintenance record: status, fuel, engine hours, days since service, hours to next service, track or blade life, capacity, range, location, driver and weather window, with start-engine, maintenance-log and assign-task actions.
+
+### Occupants
+
+Thirty-six crew figures walk fixed routes derived from the floor plan - corridor to room centre and back - so movement is repeatable and never crosses a partition except at a room's own doorway. Figures are colour coded by role, animate their legs and arms while walking, and report a profile on hover and click.
 
 ### Seven engineering view modes
 
@@ -45,9 +70,16 @@ Applied to both twins through scene-graph material overrides so every mode works
 6. **Structural** - load-bearing structure only
 7. **Night** - emissive elements only, for a polar night inspection walk
 
+### Navigation and time
+
+- **Orbit mode** outside, **walk mode** inside: WASD, mouse look with pointer lock, Shift to sprint, Space to jump, Esc to release the pointer.
+- **Mini-map** in the corner, drawing the station plot while outside and the current deck plan while inside, always with the live player marker and heading.
+- **Teleport menu** (press `T`) covering both deck landings, all forty interior rooms, every water body, every vehicle unit and the camera presets.
+- **Time of day** slider and season selector driving real solar geometry for each station's latitude: the midnight sun through summer, the polar night through winter, aurora opacity following the season, apron floodlights raised at night, and a **24 hour timelapse** that runs the full day in about ten seconds.
+
 ### 2.5D isometric cutaway
 
-The station footprint is drawn as flat isometric tiles with each room extruded as a cutaway block (floor and four walls, no ceiling). Live temperature, power draw, occupancy and status float above every room, colour coded by subsystem health, and selecting a block drives the same hotspot selection the 3D view uses.
+The station footprint is drawn as flat isometric tiles with every room of both decks extruded as a cutaway block (floor and four walls, no ceiling). The blocks are built from the same floor plans the walkable interior uses, so the cutaway and the first-person decks describe one station rather than two drawings. Live temperature, power draw, occupancy and status float above every room, colour coded by subsystem health, and selecting a block drives the same hotspot selection the 3D view uses.
 
 ### AI blackout predictor (continuity engine)
 

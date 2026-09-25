@@ -3,6 +3,7 @@ import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import {
   Aurora,
+  BuildingEntrance,
   GroundShadow,
   Hotspot,
   Lighting,
@@ -16,6 +17,9 @@ import {
   TWIN_COLORS,
   type TwinSceneProps,
 } from "./twin-primitives";
+import { IcebergTracker } from "./water/IcebergTracker";
+import { WaterBody } from "./water/WaterBody";
+import { WATER_BODIES, stationWater } from "./water/water-data";
 import { VehicleFleet } from "./VehicleFleet";
 import { BHARATI_MEP, MepOverlay } from "./MepOverlay";
 import { ViewModeEffect, modeLighting } from "./view-modes";
@@ -272,65 +276,88 @@ function SummerCamp15() {
   );
 }
 
-/** Irregular animated water body used for the fjord and the bay. */
-function WaterBody({
-  position,
-  radiusX,
-  radiusZ,
-  seed = 0,
+/**
+ * Thala Fjord, Quilty Bay, the seawater intake line and the forty-four
+ * Larsemann lakelets.
+ *
+ * Every body is interactive: a click opens its survey panel, the iceberg
+ * tracker overlay and ice thickness heatmap are driven by the same catalogue,
+ * and the lakelets are coloured by measured ice thickness when the survey
+ * overlay is switched on.
+ */
+function WaterFeatures({
+  onWaterSelect,
+  activeWater,
+  submergedWater,
+  trackedWater,
+  showLakes,
 }: {
-  position: [number, number];
-  radiusX: number;
-  radiusZ: number;
-  seed?: number;
+  onWaterSelect?: (id: string) => void;
+  activeWater?: string | null;
+  submergedWater?: string | null;
+  trackedWater?: string | null;
+  showLakes?: boolean;
 }) {
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame(({ clock }) => {
-    if (ref.current) {
-      const mat = ref.current.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = 0.22 + Math.sin(clock.elapsedTime * 0.9 + seed) * 0.07;
-    }
-  });
-  return (
-    <mesh
-      ref={ref}
-      position={[position[0], 0.3, position[1]]}
-      rotation={[-Math.PI / 2, 0, 0]}
-      scale={[radiusX, radiusZ, 1]}
-    >
-      <circleGeometry args={[1, 36]} />
-      <meshStandardMaterial
-        color={TWIN_COLORS.water}
-        emissive={TWIN_COLORS.cyan}
-        emissiveIntensity={0.25}
-        roughness={0.15}
-        metalness={0.1}
-      />
-    </mesh>
-  );
-}
+  const fjord = WATER_BODIES["thala-fjord"];
+  const bay = WATER_BODIES["quilty-bay"];
+  const intake = WATER_BODIES["seawater-intake"];
+  const lakelets = stationWater("bharati").filter((body) => body.kind === "lakelet");
 
-/** Thala Fjord, Quilty Bay and scattered small lakes. */
-function WaterFeatures() {
-  const lakes = useMemo(
-    () =>
-      Array.from({ length: 32 }, (_, i) => ({
-        x: -240 + ((i * 61) % 480),
-        z: -230 + ((i * 97) % 460),
-        r: 2.5 + ((i * 7) % 5),
-      })),
-    [],
-  );
   return (
     <group>
-      <WaterBody position={[-70, 110]} radiusX={110} radiusZ={52} seed={0} />
-      <WaterBody position={[120, 90]} radiusX={80} radiusZ={44} seed={2.1} />
-      {lakes.map((l, i) => (
-        <mesh key={i} position={[l.x, 0.26, l.z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[l.r, 14]} />
-          <meshStandardMaterial color={TWIN_COLORS.water} roughness={0.2} metalness={0.1} />
+      <WaterBody
+        def={fjord}
+        onSelect={onWaterSelect}
+        active={activeWater === fjord.id}
+        submerged={submergedWater === fjord.id}
+        trackers={trackedWater === fjord.id}
+      />
+      <WaterBody
+        def={bay}
+        onSelect={onWaterSelect}
+        active={activeWater === bay.id}
+        submerged={submergedWater === bay.id}
+        trackers={trackedWater === bay.id}
+      />
+      <WaterBody
+        def={intake}
+        onSelect={onWaterSelect}
+        active={activeWater === intake.id}
+        submerged={submergedWater === intake.id}
+      />
+
+      {/* Intake line running from the pump house out into the fjord */}
+      <mesh position={[10, 0.75, 62]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.4, 0.4, 38, 12]} />
+        <meshStandardMaterial
+          color={TWIN_COLORS.cyan}
+          emissive={TWIN_COLORS.cyan}
+          emissiveIntensity={0.45}
+          metalness={0.6}
+          roughness={0.35}
+        />
+      </mesh>
+      {[52, 62, 72].map((z) => (
+        <mesh key={z} position={[10, 0.3, z]}>
+          <boxGeometry args={[1.1, 0.9, 0.5]} />
+          <meshStandardMaterial color={TWIN_COLORS.pole} metalness={0.6} roughness={0.4} />
         </mesh>
       ))}
+
+      {lakelets.map((body) => (
+        <WaterBody
+          key={body.id}
+          def={body}
+          onSelect={onWaterSelect}
+          active={activeWater === body.id}
+          submerged={submergedWater === body.id}
+          heatmap={showLakes}
+          research={body.metrics.some((m) => m.value.startsWith("Cyanobacteria"))}
+        />
+      ))}
+
+      {trackedWater === fjord.id && <IcebergTracker def={fjord} />}
+      {trackedWater === bay.id && <IcebergTracker def={bay} />}
     </group>
   );
 }
@@ -543,6 +570,15 @@ export function BharatiScene({
   onSelect,
   activeHotspot,
   viewMode = "exterior",
+  sun,
+  onWaterSelect,
+  activeWater,
+  submergedWater,
+  trackedWater,
+  showLakes,
+  onVehicleSelect,
+  activeVehicle,
+  onEnterBuilding,
 }: TwinSceneProps) {
   return (
     <group>
@@ -556,27 +592,46 @@ export function BharatiScene({
           { x: 320, z: 180, r: 150, h: 5 },
         ]}
       />
-      <Lighting {...modeLighting(viewMode)} />
+      <Lighting
+        {...modeLighting(viewMode)}
+        sunPosition={sun?.position ?? [120, 140, 60]}
+        night={Boolean(sun?.night)}
+      />
       <Stars count={1200} />
-      <Aurora z={-240} scale={1.25} />
+      <Aurora z={-240} scale={1.25} opacity={sun?.auroraOpacity ?? 0.32} />
       <Snowfall count={6000} spread={360} />
       <GroundShadow />
 
       <ContainerStation onInfo={() => onSelect("main-station")} />
+      <BuildingEntrance
+        position={[0, 2.7, 25.6]}
+        label="Bharati main airlock"
+        onEnter={() => onEnterBuilding?.()}
+      />
       <CHPUnits />
       <FuelFarm13 />
       <SeawaterPumpHouse />
       <WastewaterPlant />
       <Laboratory />
       <SummerCamp15 />
-      <WaterFeatures />
+      <WaterFeatures
+        onWaterSelect={onWaterSelect}
+        activeWater={activeWater}
+        submergedWater={submergedWater}
+        trackedWater={trackedWater}
+        showLakes={showLakes}
+      />
       <LarsemannHills />
       <CargoYard />
       <Helipad />
       <IceRunway />
       <Sastrugi />
       <Jetty />
-      <VehicleFleet station="bharati" />
+      <VehicleFleet
+        station="bharati"
+        onSelect={onVehicleSelect}
+        activeVehicle={activeVehicle ?? null}
+      />
 
       {viewMode === "mep" && <MepOverlay {...BHARATI_MEP} />}
       {viewMode === "thermal" && (

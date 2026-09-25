@@ -1,7 +1,8 @@
-import { useRef } from "react";
+import { useRef, useState, type ReactElement } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { TWIN_COLORS } from "./twin-primitives";
+import { Label3D, TWIN_COLORS } from "./twin-primitives";
+import { statusTone, vehicleInstances } from "./vehicle-data";
 
 /**
  * Antarctic vehicle fleet.
@@ -18,18 +19,70 @@ const TRACK = "#2B333C";
 const CAB = "#7FA8C9";
 const HITCH = "#D8A017";
 
-/** Track rubber with cleats. */
-function Track({ length = 3.4, width = 0.7 }: { length?: number; width?: number }) {
+/** Track rubber with cleats that roll while the machine is running. */
+function Track({
+  length = 3.4,
+  width = 0.7,
+  running = false,
+}: {
+  length?: number;
+  width?: number;
+  running?: boolean;
+}) {
+  const cleats = useRef<THREE.Group>(null);
+  const step = length / 3.2;
+  useFrame(({ clock }) => {
+    if (!cleats.current) return;
+    cleats.current.position.x = running ? ((clock.elapsedTime * 1.6) % step) - step / 2 : 0;
+  });
   return (
     <group>
       <mesh castShadow>
         <boxGeometry args={[length, 0.5, width]} />
         <meshStandardMaterial color={TRACK} roughness={0.9} />
       </mesh>
-      {[-1, 0, 1].map((i) => (
-        <mesh key={i} position={[i * (length / 3.2), 0.28, 0]}>
-          <boxGeometry args={[0.18, 0.1, width * 1.05]} />
-          <meshStandardMaterial color="#77828C" roughness={0.6} metalness={0.4} />
+      <group ref={cleats}>
+        {[-1, 0, 1].map((i) => (
+          <mesh key={i} position={[i * step, 0.28, 0]}>
+            <boxGeometry args={[0.18, 0.1, width * 1.05]} />
+            <meshStandardMaterial color="#77828C" roughness={0.6} metalness={0.4} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+/** Exhaust particulates, shown only while the engine is running. */
+function ExhaustSmoke({
+  position,
+  running,
+  count = 14,
+}: {
+  position: [number, number, number];
+  running: boolean;
+  count?: number;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.children.forEach((child, i) => {
+      const phase = ((clock.elapsedTime * 0.5 + i * 0.14) % 1 + 1) % 1;
+      child.position.y = phase * 2.6;
+      child.position.x = Math.sin(phase * 3 + i) * 0.35;
+      const scale = 0.35 + phase * 1.5;
+      child.scale.setScalar(scale);
+      const mesh = child as THREE.Mesh;
+      const material = mesh.material as THREE.MeshStandardMaterial;
+      material.opacity = running ? 0.34 * (1 - phase) : 0;
+    });
+  });
+  return (
+    <group ref={ref} position={position} visible={running}>
+      {Array.from({ length: count }, (_, i) => (
+        <mesh key={i}>
+          <sphereGeometry args={[0.16, 7, 7]} />
+          <meshStandardMaterial color="#9AA6B0" transparent opacity={0.3} depthWrite={false} />
         </mesh>
       ))}
     </group>
@@ -67,7 +120,13 @@ function Beacon({ y = 1.4, x = 0 }: { y?: number; x?: number }) {
 }
 
 /** 1. PistenBully style tracked snow vehicle. */
-function PistenBully() {
+function PistenBully({ running = false }: { running?: boolean }) {
+  const blade = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (!blade.current) return;
+    // The blade breathes through a short hydraulic stroke while running.
+    blade.current.rotation.x = running ? -0.18 + Math.sin(clock.elapsedTime * 0.9) * 0.12 : -0.04;
+  });
   return (
     <group>
       <mesh position={[0, 0.72, 0]} castShadow>
@@ -83,15 +142,22 @@ function PistenBully() {
         <meshStandardMaterial color="#0E1A26" />
       </mesh>
       <group position={[0, 0.34, 1.35]}>
-        <Track />
+        <Track running={running} />
       </group>
       <group position={[0, 0.34, -1.35]}>
-        <Track />
+        <Track running={running} />
       </group>
-      <mesh position={[0, 1.1, 1.9]} rotation={[0.35, 0, 0]}>
-        <boxGeometry args={[2.1, 0.75, 0.16]} />
-        <meshStandardMaterial color="#D5DDE4" roughness={0.5} />
-      </mesh>
+      <group ref={blade} position={[0, 0.7, 2.1]}>
+        <mesh position={[0, 0.4, 0.1]} rotation={[0.35, 0, 0]}>
+          <boxGeometry args={[2.6, 0.9, 0.18]} />
+          <meshStandardMaterial color="#D5DDE4" roughness={0.5} metalness={0.3} />
+        </mesh>
+        <mesh position={[0, 0.05, -0.2]}>
+          <boxGeometry args={[2.4, 0.2, 0.3]} />
+          <meshStandardMaterial color={BODY_DARK} metalness={0.6} roughness={0.4} />
+        </mesh>
+      </group>
+      <ExhaustSmoke position={[-0.6, 1.6, 0.6]} running={running} />
       <group position={[0, 2.35, 0.2]}>
         <mesh>
           <boxGeometry args={[1.9, 0.16, 0.35]} />
@@ -110,7 +176,7 @@ function PistenBully() {
 }
 
 /** 2. Snowmobile / snow scooter. */
-function Snowmobile() {
+function Snowmobile({ running = false }: { running?: boolean }) {
   return (
     <group>
       <mesh position={[0, 0.62, 0]} castShadow>
@@ -122,7 +188,7 @@ function Snowmobile() {
         <meshStandardMaterial color="#12202E" roughness={0.7} />
       </mesh>
       <mesh position={[0, 0.3, -1.05]}>
-        <Track length={1.7} width={0.5} />
+        <Track length={1.7} width={0.5} running={running} />
       </mesh>
       <mesh position={[0, 0.28, 1.15]} rotation={[-0.18, 0, 0]}>
         <boxGeometry args={[0.68, 0.1, 1.05]} />
@@ -177,7 +243,7 @@ function Atv() {
 }
 
 /** 4. Tracked cargo carrier. */
-function CargoCarrier() {
+function CargoCarrier({ running = false }: { running?: boolean }) {
   return (
     <group>
       <mesh position={[0, 0.8, 0]} castShadow>
@@ -193,10 +259,10 @@ function CargoCarrier() {
         <meshStandardMaterial color={BODY} roughness={0.6} />
       </mesh>
       <group position={[0.95, 0.36, 0]}>
-        <Track length={4.0} width={0.8} />
+        <Track length={4.0} width={0.8} running={running} />
       </group>
       <group position={[-0.95, 0.36, 0]}>
-        <Track length={4.0} width={0.8} />
+        <Track length={4.0} width={0.8} running={running} />
       </group>
       <Beacon y={2.2} x={-0.6} />
     </group>
@@ -204,12 +270,12 @@ function CargoCarrier() {
 }
 
 /** 5. Helicopter with animated rotor. */
-function Helicopter() {
+function Helicopter({ running = false }: { running?: boolean }) {
   const rotor = useRef<THREE.Group>(null);
   const tail = useRef<THREE.Group>(null);
   useFrame((_, delta) => {
-    if (rotor.current) rotor.current.rotation.y += delta * 9;
-    if (tail.current) tail.current.rotation.x += delta * 16;
+    if (rotor.current) rotor.current.rotation.y += delta * (running ? 9 : 0.35);
+    if (tail.current) tail.current.rotation.x += delta * (running ? 16 : 0.5);
   });
   return (
     <group>
@@ -331,10 +397,10 @@ function CargoSledge() {
 }
 
 /** 8. Snow blower. */
-function SnowBlower() {
+function SnowBlower({ running = false }: { running?: boolean }) {
   const auger = useRef<THREE.Mesh>(null);
   useFrame((_, delta) => {
-    if (auger.current) auger.current.rotation.x += delta * 3;
+    if (auger.current) auger.current.rotation.x += delta * (running ? 3 : 0.2);
   });
   return (
     <group>
@@ -355,10 +421,10 @@ function SnowBlower() {
         <meshStandardMaterial color="#C63A2B" roughness={0.5} />
       </mesh>
       <group position={[-0.8, 0.36, -0.3]}>
-        <Track length={2.6} width={0.6} />
+        <Track length={2.6} width={0.6} running={running} />
       </group>
       <group position={[0.8, 0.36, -0.3]}>
-        <Track length={2.6} width={0.6} />
+        <Track length={2.6} width={0.6} running={running} />
       </group>
       <Beacon y={2.3} />
     </group>
@@ -403,10 +469,13 @@ function Forklift() {
 }
 
 /** 10. Mobile crane. */
-function MobileCrane() {
+function MobileCrane({ running = false }: { running?: boolean }) {
   const turret = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
-    if (turret.current) turret.current.rotation.y = 0.6 + Math.sin(clock.elapsedTime * 0.25) * 0.35;
+    if (!turret.current) return;
+    turret.current.rotation.y = running
+      ? 0.6 + Math.sin(clock.elapsedTime * 0.25) * 0.35
+      : 0.35;
   });
   return (
     <group>
@@ -450,12 +519,13 @@ function MobileCrane() {
 }
 
 /** 11. Zodiac inflatable boat. */
-function Zodiac() {
+function Zodiac({ running = false }: { running?: boolean }) {
   const bob = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
     if (bob.current) {
-      bob.current.position.y = 0.42 + Math.sin(clock.elapsedTime * 1.1) * 0.08;
-      bob.current.rotation.z = Math.sin(clock.elapsedTime * 0.8) * 0.04;
+      const amp = running ? 0.14 : 0.07;
+      bob.current.position.y = 0.42 + Math.sin(clock.elapsedTime * 1.1) * amp;
+      bob.current.rotation.z = Math.sin(clock.elapsedTime * 0.8) * (running ? 0.07 : 0.03);
     }
   });
   return (
@@ -522,7 +592,14 @@ function UtilityTrailer() {
 }
 
 /** Vehicle class registry used to lay out each station yard. */
-export const VEHICLE_CLASSES = [
+export interface VehicleClassDef {
+  id: string;
+  label: string;
+  Component: (props: { running?: boolean }) => ReactElement;
+  scale: number;
+}
+
+export const VEHICLE_CLASSES: VehicleClassDef[] = [
   { id: "pistenbully", label: "PistenBully", Component: PistenBully, scale: 1 },
   { id: "snowmobile", label: "Snowmobile", Component: Snowmobile, scale: 1 },
   { id: "atv", label: "ATV Quad Bike", Component: Atv, scale: 1 },
@@ -535,7 +612,7 @@ export const VEHICLE_CLASSES = [
   { id: "mobile-crane", label: "Mobile Crane", Component: MobileCrane, scale: 1 },
   { id: "zodiac", label: "Zodiac Boat", Component: Zodiac, scale: 1 },
   { id: "trailer", label: "Utility Trailer", Component: UtilityTrailer, scale: 1 },
-] as const;
+];
 
 /** Fleet complement per station. */
 export const FLEET: Record<
@@ -574,9 +651,93 @@ export const FLEET: Record<
   ],
 };
 
-/** Full vehicle yard for one station. */
-export function VehicleFleet({ station }: { station: "maitri" | "bharati" }) {
+/**
+ * One parked unit.
+ *
+ * The unit is clickable and reports its stable identifier, so the console can
+ * open the right maintenance record. Hovering shows a tail number plate in the
+ * status colour, which is how the yard reads at a glance from the air.
+ */
+function VehicleUnit({
+  instanceId,
+  tail,
+  label,
+  tone,
+  position,
+  rotation,
+  running,
+  active,
+  onSelect,
+  children,
+}: {
+  instanceId: string;
+  tail: string;
+  label: string;
+  tone: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  running: boolean;
+  active: boolean;
+  onSelect?: (id: string) => void;
+  children: ReactElement;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <group
+      position={position}
+      rotation={rotation}
+      scale={0.9}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        setHovered(true);
+        if (onSelect) document.body.style.cursor = "pointer";
+      }}
+      onPointerOut={() => {
+        setHovered(false);
+        document.body.style.cursor = "auto";
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect?.(instanceId);
+      }}
+    >
+      {children}
+      {(hovered || active) && (
+        <Label3D
+          position={[0, 3.4, 0]}
+          border={tone}
+          px={0.14}
+          rows={[
+            { text: tail, color: tone },
+            { text: running ? "RUNNING" : "PARKED", color: running ? "#3EE07F" : "#6B7A8F" },
+          ]}
+        />
+      )}
+      {active && (
+        <mesh position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[2.6, 3.1, 28]} />
+          <meshStandardMaterial color={tone} emissive={tone} emissiveIntensity={0.8} transparent opacity={0.6} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+/** Full vehicle yard for one station, with per unit interaction. */
+export function VehicleFleet({
+  station,
+  onSelect,
+  activeVehicle,
+  runningIds,
+}: {
+  station: "maitri" | "bharati";
+  onSelect?: (instanceId: string) => void;
+  activeVehicle?: string | null;
+  /** Units whose engines the operator has started. */
+  runningIds?: string[];
+}) {
   const layout = FLEET[station] ?? [];
+  const instances = vehicleInstances(station);
   return (
     <group>
       {layout.map((entry) => {
@@ -585,20 +746,33 @@ export function VehicleFleet({ station }: { station: "maitri" | "bharati" }) {
         const { Component } = cls;
         return (
           <group key={entry.id}>
-            {Array.from({ length: entry.count }).map((_, i) => (
-              <group
-                key={i}
-                position={[
-                  entry.x + i * entry.dx,
-                  0,
-                  entry.z + (i % 2 === 0 ? 0 : entry.dz),
-                ]}
-                rotation={[0, entry.rot + i * 0.12, 0]}
-                scale={0.9}
-              >
-                <Component />
-              </group>
-            ))}
+            {Array.from({ length: entry.count }).map((_, i) => {
+              const instanceId = `${station}-${entry.id}-${i + 1}`;
+              const record = instances.find((v) => v.id === instanceId);
+              const running = runningIds
+                ? runningIds.includes(instanceId)
+                : (record?.running ?? false);
+              return (
+                <VehicleUnit
+                  key={instanceId}
+                  instanceId={instanceId}
+                  tail={record?.tail ?? "VH-01"}
+                  label={record?.label ?? cls.label}
+                  tone={record ? statusTone(record.status) : TWIN_COLORS.cyan}
+                  position={[
+                    entry.x + i * entry.dx,
+                    0,
+                    entry.z + (i % 2 === 0 ? 0 : entry.dz),
+                  ]}
+                  rotation={[0, entry.rot + i * 0.12, 0]}
+                  running={running}
+                  active={activeVehicle === instanceId}
+                  onSelect={onSelect}
+                >
+                  <Component running={running} />
+                </VehicleUnit>
+              );
+            })}
           </group>
         );
       })}

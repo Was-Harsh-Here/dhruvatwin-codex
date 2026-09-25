@@ -14,7 +14,27 @@ import {
 import { TwoAndHalfD } from "@/components/twin/TwoAndHalfD";
 import { VIEW_MODES, type ViewMode } from "@/components/twin/view-modes";
 import { FLEET, VEHICLE_CLASSES, fleetCount } from "@/components/twin/VehicleFleet";
+import { vehicleInstances, vehicleById } from "@/components/twin/vehicle-data";
+import { UnderwaterView } from "@/components/twin/water/UnderwaterView";
+import { WATER_BODIES, stationWater } from "@/components/twin/water/water-data";
+import { InteriorSystem } from "@/components/twin/interiors/InteriorSystem";
+import { floorPlan } from "@/components/twin/interiors/plans";
+import type { InspectTarget } from "@/components/twin/interiors/kit";
+import { CREW } from "@/components/twin/interiors/plans";
+import {
+  LakesOverlay,
+  ObjectPanel,
+  RoomPanel,
+  VehiclePanel,
+  WaterPanel,
+} from "@/components/twin/TwinPanels";
+import {
+  MiniMap,
+  TeleportMenu,
+  type TeleportTarget,
+} from "@/components/twin/navigation/TwinNav";
 import { useBlackout } from "@/hooks/use-blackout";
+import { useTimeOfDay, type Season } from "@/hooks/use-time-of-day";
 import { useStationLinkContext } from "@/components/StationLinkProvider";
 import {
   SUBSYSTEM_LABELS,
@@ -24,8 +44,21 @@ import {
   stationFromParams,
   type StationSlug,
 } from "@/lib/station";
-import { Box, Cpu, Layers, Loader2, Radio, Satellite, TriangleAlert } from "lucide-react";
-import { Component, Suspense, useMemo, useState, type ReactNode } from "react";
+import {
+  Box,
+  Cpu,
+  Crosshair,
+  DoorOpen,
+  Footprints,
+  Layers,
+  Loader2,
+  Mountain,
+  Radio,
+  Satellite,
+  Thermometer,
+  TriangleAlert,
+} from "lucide-react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +69,9 @@ const PRESETS: Array<CameraPreset & { station?: StationSlug }> = [
   { id: "bharati", label: "Bharati Focus", position: [72, 44, 84], target: [0, 8, 6], station: "bharati" },
   { id: "aerial", label: "Aerial", position: [60, 360, 80], target: [0, 0, 0] },
   { id: "zoom", label: "Component Zoom", position: [30, 14, -42], target: [16, 2, -26] },
+  { id: "lake", label: "Lake Priyadarshini", position: [-58, 42, 92], target: [-58, 0, 36], station: "maitri" },
+  { id: "fjord", label: "Thala Fjord", position: [-70, 58, 214], target: [-70, 0, 110], station: "bharati" },
+  { id: "bay", label: "Quilty Bay", position: [120, 52, 196], target: [120, 0, 90], station: "bharati" },
 ];
 
 /** Hotspot detail copy for both stations. */
@@ -43,12 +79,12 @@ const HOTSPOT_INFO: Record<string, { name: string; info: string; equipmentId?: s
   "main-station": {
     name: "Main Station",
     info:
-      "Habitation and command core. Habitat temperature and CO2 channels are watched against life-support bands; the building itself houses the operations room this console mirrors.",
+      "Habitation and command core. Click the amber airlock marker on the building to walk inside; every room in the module is modelled and interactive.",
   },
   lake: {
     name: "Lake Priyadarshini",
     info:
-      "Water source for the station, 0.297 square kilometres. The heated pipeline runs from here; its temperature channel is the freeze-critical one.",
+      "Water source for the station, 0.297 square kilometres. Click the water surface for depth, ice thickness, purity and the twelve month ice coverage record.",
     equipmentId: "PIPE-MAITRI",
   },
   pipeline: {
@@ -89,7 +125,7 @@ const HOTSPOT_INFO: Record<string, { name: string; info: string; equipmentId?: s
   seawater: {
     name: "Seawater Pump House",
     info:
-      "Draws water through a 450-metre intake. Flow below the warning band means ice blockage or pump trouble and triggers an incident.",
+      "Draws water through a 450-metre intake. Click the intake line or the bay surface for flow, filter state and trace heating readings.",
     equipmentId: "SWPUMP-BHARATI",
   },
   wastewater: {
@@ -105,17 +141,17 @@ const HOTSPOT_INFO: Record<string, { name: string; info: string; equipmentId?: s
   fjord: {
     name: "Thala Fjord",
     info:
-      "The fjord Bharati overlooks. Sea state and ice here drive the seawater intake the station depends on.",
+      "The fjord Bharati overlooks. Click the water for salinity, ice coverage, depth and the iceberg tracker.",
   },
   bay: {
     name: "Quilty Bay",
     info:
-      "Second water body on the shoreline. Small lakes across the Larsemann Hills are also modelled in the terrain.",
+      "Second water body on the shoreline. Forty-four Larsemann lakes are also modelled and individually clickable.",
   },
   "vehicle-fleet": {
     name: "Vehicle Fleet",
     info:
-      "Twelve vehicle classes are rendered in the twin, from tracked PistenBully snow vehicles and cargo carriers to the helicopter, Nansen sledges and the Zodiac boat. Fleet state feeds the field movement planner.",
+      "Twelve vehicle classes are rendered in the twin. Click any unit to open its maintenance record, fuel state and service interval.",
   },
   helipad: {
     name: "Helipad",
@@ -147,17 +183,39 @@ class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean
   }
 }
 
-/** Digital Twin 3D view for the selected station. */
+type ViewKind = "exterior" | "interior" | "isometric";
+
+/** Digital Twin view: exterior world, walkable interior and isometric cutaway. */
 export default function Twin() {
   const [params, setParams] = useSearchParams();
   const slug = stationFromParams(params);
+  const stationLabel = slug === "maitri" ? "Maitri" : "Bharati";
+  const latitude = slug === "maitri" ? -70.7644 : -69.4114;
+
+  const [view, setView] = useState<ViewKind>("exterior");
+  const [deckView, setDeckView] = useState<"walk" | "deck">("walk");
+  const [level, setLevel] = useState(0);
+  const [spawn, setSpawn] = useState<[number, number, number]>([0, 1.7, 0]);
+  const [locked, setLocked] = useState(false);
+  const [position, setPosition] = useState({ x: 0, z: 0, yaw: 0 });
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [inspect, setInspect] = useState<InspectTarget | null>(null);
+  const [activeVehicle, setActiveVehicle] = useState<string | null>(null);
+  const [runningVehicles, setRunningVehicles] = useState<string[]>([]);
+  const [activeWater, setActiveWater] = useState<string | null>(null);
+  const [submergedWater, setSubmergedWater] = useState<string | null>(null);
+  const [trackedWater, setTrackedWater] = useState<string | null>(null);
+  const [lakesOpen, setLakesOpen] = useState(false);
+  const [teleportOpen, setTeleportOpen] = useState(false);
+
   const [preset, setPreset] = useState("overview");
   const [viewMode, setViewMode] = useState<ViewMode>("exterior");
-  const [isometric, setIsometric] = useState(false);
   const [active, setActive] = useState<string | null>(null);
 
+  const time = useTimeOfDay(latitude);
   const readingsRaw = useQuery(api.telemetry.getLiveReadings, { slug });
   const blackout = useBlackout(slug);
+  const link = useStationLinkContext();
 
   const readings = useMemo(
     () =>
@@ -172,57 +230,358 @@ export default function Twin() {
     [readingsRaw],
   );
 
-  const link = useStationLinkContext();
+  const plan = floorPlan(slug, level);
+  const room = plan?.rooms.find((r) => r.id === roomId) ?? null;
+  const water = activeWater ? WATER_BODIES[activeWater] : null;
+  const submergedBody = submergedWater ? WATER_BODIES[submergedWater] : null;
+  /** The body currently shown in the water panel, dive included. */
+  const displayBody = submergedBody ?? water;
+  const vehicle = activeVehicle ? vehicleById(activeVehicle) : null;
 
-  const liveChannels = active
-    ? readings.filter((r) => r.equipmentId === HOTSPOT_INFO[active]?.equipmentId)
-    : [];
+  const crewHere = useMemo(() => {
+    if (!room) return [];
+    return (CREW[slug] ?? [])
+      .filter((c) => c.level === level && c.route.roomIds.includes(room.id))
+      .map((c) => c.name);
+  }, [room, slug, level]);
 
-  const stationLabel = slug === "maitri" ? "Maitri" : "Bharati";
-  const activeMode = VIEW_MODES.find((m) => m.id === viewMode) ?? VIEW_MODES[0];
+  const liveWater = useMemo(() => {
+    if (!displayBody?.live) return null;
+    const match = (readingsRaw ?? []).find(
+      (r) =>
+        r.equipmentId === displayBody.live?.tag &&
+        r.parameter === displayBody.live?.parameter,
+    );
+    if (!match) return null;
+    return {
+      value: match.value,
+      unit: match.unit,
+      decimals: match.decimals,
+      status: match.status,
+    };
+  }, [readingsRaw, displayBody]);
 
   const reconciliation = blackout.reconciliation ?? blackout.lastReconciliation;
+  const activeMode = VIEW_MODES.find((m) => m.id === viewMode) ?? VIEW_MODES[0];
 
-  const applyPreset = (next: CameraPreset & { station?: StationSlug }) => {
-    if (next.station && next.station !== slug) {
-      setParams(
-        (prev) => {
-          const params2 = new URLSearchParams(prev);
-          params2.set("station", next.station as string);
-          return params2;
-        },
-        { replace: true },
-      );
+  /* ---------------------------------------------------------------- */
+  /* Navigation                                                        */
+  /* ---------------------------------------------------------------- */
+
+  const teleportTargets = useMemo<TeleportTarget[]>(() => {
+    const targets: TeleportTarget[] = [];
+    for (const floor of [0, 1]) {
+      const floorDef = floorPlan(slug, floor);
+      if (!floorDef) continue;
+      targets.push({
+        id: `deck-${floor}`,
+        label: `Deck ${floor + 1} landing`,
+        group: "Interior",
+        level: floor,
+        spawn: floorDef.spawn,
+      });
+      for (const r of floorDef.rooms) {
+        targets.push({
+          id: `room-${floor}-${r.id}`,
+          label: `${r.name} (deck ${floor + 1})`,
+          group: "Interior",
+          level: floor,
+          spawn: [r.x, floorDef.y + 1.7, r.z],
+        });
+      }
     }
-    setPreset(next.id);
-  };
+    for (const body of stationWater(slug)) {
+      targets.push({
+        id: `water-${body.id}`,
+        label: body.name,
+        group: "Water",
+        waterId: body.id,
+      });
+    }
+    for (const unit of vehicleInstances(slug)) {
+      targets.push({ id: `vehicle-${unit.id}`, label: unit.label, group: "Vehicle", vehicleId: unit.id });
+    }
+    for (const p of PRESETS) {
+      targets.push({ id: `preset-${p.id}`, label: p.label, group: "Exterior", preset: p.id });
+    }
+    return targets;
+  }, [slug]);
+
+  const applyTarget = useCallback(
+    (target: TeleportTarget) => {
+      setTeleportOpen(false);
+      if (target.preset) {
+        const presetDef = PRESETS.find((p) => p.id === target.preset);
+        if (presetDef?.station && presetDef.station !== slug) {
+          setParams(
+            (prev) => {
+              const next = new URLSearchParams(prev);
+              next.set("station", presetDef.station as string);
+              return next;
+            },
+            { replace: true },
+          );
+        }
+        setView("exterior");
+        setSubmergedWater(null);
+        setPreset(target.preset);
+      }
+      if (target.level !== undefined && target.spawn) {
+        setView("interior");
+        setDeckView("walk");
+        setLevel(target.level);
+        setSpawn(target.spawn);
+        setRoomId(null);
+      }
+      if (target.waterId) {
+        setView("exterior");
+        setSubmergedWater(null);
+        setActiveWater(target.waterId);
+        const body = WATER_BODIES[target.waterId];
+        const matching =
+          body?.kind === "fjord" ? "fjord" : body?.kind === "bay" ? "bay" : "lake";
+        if (body?.station === slug) setPreset(matching);
+      }
+      if (target.vehicleId) {
+        setView("exterior");
+        setActiveVehicle(target.vehicleId);
+        setInspect(null);
+      }
+    },
+    [setParams, slug],
+  );
+
+  const applyPreset = useCallback(
+    (next: CameraPreset & { station?: StationSlug }) => {
+      if (next.station && next.station !== slug) {
+        setParams(
+          (prev) => {
+            const params2 = new URLSearchParams(prev);
+            params2.set("station", next.station as string);
+            return params2;
+          },
+          { replace: true },
+        );
+      }
+      setPreset(next.id);
+      setSubmergedWater(null);
+    },
+    [setParams, slug],
+  );
+
+  const enterInterior = useCallback(() => {
+    const ground = floorPlan(slug, 0);
+    setView("interior");
+    setDeckView("walk");
+    setLevel(0);
+    setRoomId(null);
+    setInspect(null);
+    setSpawn(ground?.spawn ?? [0, 1.7, 0]);
+  }, [slug]);
+
+  const leaveInterior = useCallback(() => {
+    setView("exterior");
+    setLocked(false);
+    setRoomId(null);
+    setInspect(null);
+    if (document.pointerLockElement) document.exitPointerLock();
+  }, []);
+
+  /* Keyboard shortcuts: T teleport, Esc leaves walk mode. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "KeyT") setTeleportOpen((v) => !v);
+      if (e.code === "Escape" && view === "interior" && deckView === "walk" && !locked) {
+        leaveInterior();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [deckView, leaveInterior, locked, view]);
+
+  const onWaterAction = useCallback(
+    (bodyId: string, action: { id: string; label: string }) => {
+      switch (action.id) {
+        case "underwater":
+          setView("exterior");
+          setSubmergedWater((current) => (current === bodyId ? null : bodyId));
+          break;
+        case "icebergs":
+        case "floes":
+          setTrackedWater((current) => (current === bodyId ? null : bodyId));
+          break;
+        case "lakes":
+          setLakesOpen((open) => !open);
+          break;
+        default:
+          setActiveWater(bodyId);
+          break;
+      }
+    },
+    [],
+  );
+
+  const toggleEngine = useCallback((id: string) => {
+    setRunningVehicles((current) =>
+      current.includes(id) ? current.filter((v) => v !== id) : [...current, id],
+    );
+  }, []);
+
+  /** Sun state memoised on its primitives so the scene element stays stable. */
+  const sun = useMemo(
+    () => ({
+      position: time.position,
+      intensity: time.intensity,
+      night: time.night,
+      label: time.label,
+      auroraOpacity: time.auroraOpacity,
+    }),
+    [time.position, time.intensity, time.night, time.label, time.auroraOpacity],
+  );
+
+  const handleVehicleSelect = useCallback((id: string) => {
+    setActiveVehicle(id);
+    setInspect(null);
+  }, []);
+
+  const handleLevel = useCallback(
+    (next: number) => {
+      const nextPlan = floorPlan(slug, next);
+      setLevel(next);
+      setSpawn(nextPlan?.spawn ?? [0, 1.7, 0]);
+      setRoomId(null);
+    },
+    [slug],
+  );
+
+  const handlePosition = useCallback((x: number, z: number, yaw: number) => {
+    setPosition({ x, z, yaw });
+  }, []);
+
+  /**
+   * The exterior scene is memoised on its real inputs. Walking inside the
+   * station updates the player position several times a second, and without
+   * this the whole station scene would re-render with every step.
+   */
+  const exteriorScene = useMemo(
+    () =>
+      slug === "maitri" ? (
+        <MaitriScene
+          readings={readings}
+          onSelect={setActive}
+          activeHotspot={active}
+          viewMode={viewMode}
+          sun={sun}
+          onWaterSelect={setActiveWater}
+          activeWater={activeWater}
+          submergedWater={submergedWater}
+          trackedWater={trackedWater}
+          onVehicleSelect={handleVehicleSelect}
+          activeVehicle={activeVehicle}
+          onEnterBuilding={enterInterior}
+        />
+      ) : (
+        <BharatiScene
+          readings={readings}
+          onSelect={setActive}
+          activeHotspot={active}
+          viewMode={viewMode}
+          sun={sun}
+          onWaterSelect={setActiveWater}
+          activeWater={activeWater}
+          submergedWater={submergedWater}
+          trackedWater={trackedWater}
+          showLakes={lakesOpen}
+          onVehicleSelect={handleVehicleSelect}
+          activeVehicle={activeVehicle}
+          onEnterBuilding={enterInterior}
+        />
+      ),
+    [
+      slug,
+      readings,
+      active,
+      viewMode,
+      sun,
+      activeWater,
+      submergedWater,
+      trackedWater,
+      lakesOpen,
+      activeVehicle,
+      handleVehicleSelect,
+      enterInterior,
+    ],
+  );
+
+  /** The furnished deck, memoised so a step does not rebuild every room. */
+  const interiorScene = useMemo(
+    () => (
+      <InteriorSystem
+        slug={slug}
+        level={level}
+        view={deckView}
+        spawn={spawn}
+        onInspect={setInspect}
+        onLevel={handleLevel}
+        onRoomChange={setRoomId}
+        onPosition={handlePosition}
+        onLockChange={setLocked}
+        onExitWalk={leaveInterior}
+      />
+    ),
+    [slug, level, deckView, spawn, handleLevel, handlePosition, leaveInterior],
+  );
+
+  const interior = view === "interior";
+  const underwater = Boolean(submergedBody);
 
   return (
     <AppShell>
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="cc-label">Digital Twin</div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight">
               {stationLabel} 3D twin
             </h1>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Interactive scale model of the station. Cyan markers are clickable and open a
-              live telemetry panel; the amber readout strip above the station streams real
-              sensor values from the simulation. Seven view modes and a 2.5D isometric
-              cutaway are available from the left dock.
+            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+              One interactive world: 1.7 km of orbitable terrain outside, every room of the
+              station walkable inside, every water body clickable, every vehicle modelled with
+              its own maintenance record. Seven view modes, a 2.5D cutaway, a time of day
+              slider and a ten second seasonal timelapse.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn("text-xs", isometric && "border-primary/60 text-primary")}
-              onClick={() => setIsometric((v) => !v)}
-            >
-              <Layers className="mr-1.5 size-3.5" />
-              {isometric ? "3D view" : "2.5D cutaway"}
-            </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
+              {(
+                [
+                  { id: "exterior", label: "Exterior", icon: Mountain },
+                  { id: "interior", label: "Interior", icon: DoorOpen },
+                  { id: "isometric", label: "2.5D", icon: Layers },
+                ] as const
+              ).map((option) => {
+                const Icon = option.icon;
+                return (
+                  <Button
+                    key={option.id}
+                    variant="ghost"
+                    size="sm"
+                    className={cn("text-xs", view === option.id && "bg-primary/15 text-primary")}
+                    onClick={() => {
+                      if (option.id === "interior") enterInterior();
+                      else {
+                        setView(option.id);
+                        if (option.id !== "exterior") setSubmergedWater(null);
+                      }
+                    }}
+                  >
+                    <Icon className="mr-1.5 size-3.5" />
+                    {option.label}
+                  </Button>
+                );
+              })}
+            </div>
             <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
               {(["maitri", "bharati"] as const).map((s) => (
                 <Button
@@ -230,56 +589,66 @@ export default function Twin() {
                   asChild
                   variant="ghost"
                   size="sm"
-                  className={cn(
-                    "cursor-pointer text-xs",
-                    slug === s && "bg-primary/15 text-primary",
-                  )}
+                  className={cn("cursor-pointer text-xs", slug === s && "bg-primary/15 text-primary")}
                 >
                   <a href={`/twin?station=${s}`}>{s === "maitri" ? "Maitri" : "Bharati"}</a>
                 </Button>
               ))}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn("text-xs", teleportOpen && "border-primary/60 text-primary")}
+              onClick={() => setTeleportOpen((v) => !v)}
+            >
+              <Crosshair className="mr-1.5 size-3.5" />
+              Teleport
+            </Button>
           </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-4">
           {/* Viewport */}
           <Card className="cc-panel border-border p-0 shadow-none lg:col-span-3">
-            <div className="relative h-[600px] w-full overflow-hidden rounded-lg">
-              {isometric ? (
-                <TwoAndHalfD
-                  slug={slug}
-                  readings={readings}
-                  onSelect={setActive}
-                  activeHotspot={active}
-                />
-              ) : (
-                <TwinCanvas>
-                  <SceneBoundary>
-                    <Suspense fallback={null}>
-                      {slug === "maitri" ? (
-                        <MaitriScene
-                          readings={readings}
-                          onSelect={setActive}
-                          activeHotspot={active}
-                          viewMode={viewMode}
-                        />
+            <div className="relative h-[620px] w-full overflow-hidden rounded-lg">
+              <SceneBoundary>
+                <Suspense fallback={null}>
+                  {view === "isometric" ? (
+                    <TwoAndHalfD
+                      slug={slug}
+                      readings={readings}
+                      onSelect={setActive}
+                      activeHotspot={active}
+                    />
+                  ) : view === "interior" ? (
+                    <TwinCanvas fogColor="#05080D" fogNear={30} fogFar={120} cameraPosition={[0, 1.7, 0]}>
+                      {interiorScene}
+                    </TwinCanvas>
+                  ) : (
+                    <TwinCanvas
+                      fogColor={underwater ? "#04141F" : "#0B1622"}
+                      fogNear={underwater ? 4 : 180}
+                      fogFar={underwater ? 90 : 420}
+                      cameraPosition={[150, 95, 150]}
+                    >
+                      {exteriorScene}
+                      {submergedBody ? (
+                        <UnderwaterView def={submergedBody} />
                       ) : (
-                        <BharatiScene
-                          readings={readings}
-                          onSelect={setActive}
-                          activeHotspot={active}
-                          viewMode={viewMode}
-                        />
+                        <CameraRig preset={preset} presets={PRESETS} />
                       )}
-                      <CameraRig preset={preset} presets={PRESETS} />
-                    </Suspense>
-                  </SceneBoundary>
-                </TwinCanvas>
+                    </TwinCanvas>
+                  )}
+                </Suspense>
+              </SceneBoundary>
+
+              {/* Underwater tint */}
+              {underwater && (
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(159,228,255,0.22),rgba(4,20,31,0.85))]" />
               )}
 
               {/* View mode dock */}
-              {!isometric && (
+              {view === "exterior" && !underwater && (
                 <div className="absolute left-3 top-3 flex flex-col gap-1">
                   <span className="cc-label px-1 pb-0.5 text-[9px]">View mode</span>
                   {VIEW_MODES.map((mode) => (
@@ -302,8 +671,8 @@ export default function Twin() {
               )}
 
               {/* Camera presets */}
-              {!isometric && (
-                <div className="absolute left-40 top-3 flex flex-col gap-1">
+              {view === "exterior" && !underwater && (
+                <div className="absolute left-40 top-3 flex max-h-[420px] flex-col gap-1 overflow-y-auto">
                   <span className="cc-label px-1 pb-0.5 text-[9px]">Camera</span>
                   {PRESETS.map((p) => (
                     <button
@@ -334,10 +703,7 @@ export default function Twin() {
               >
                 <div className="flex items-center gap-2">
                   <Satellite
-                    className={cn(
-                      "size-3.5",
-                      blackout.active ? "text-[#FF3B47]" : "text-[#3EE07F]",
-                    )}
+                    className={cn("size-3.5", blackout.active ? "text-[#FF3B47]" : "text-[#3EE07F]")}
                   />
                   <span className="cc-label text-[9px]">
                     {blackout.active ? "BLACKOUT" : "VSAT NOMINAL"}
@@ -353,36 +719,144 @@ export default function Twin() {
                 </div>
               </div>
 
-              {/* Red pulsing border during blackout */}
+              {/* Blackout border */}
               {blackout.active && (
                 <div className="pointer-events-none absolute inset-0 animate-pulse rounded-lg ring-4 ring-inset ring-[#FF3B47]" />
               )}
 
+              {/* Interior controls */}
+              {interior && (
+                <div className="absolute left-3 top-3 flex flex-col gap-1">
+                  <span className="cc-label px-1 pb-0.5 text-[9px]">Deck</span>
+                  {[0, 1].map((deck) => (
+                    <button
+                      key={deck}
+                      type="button"
+                      onClick={() => {
+                        const nextPlan = floorPlan(slug, deck);
+                        setLevel(deck);
+                        setSpawn(nextPlan?.spawn ?? [0, 1.7, 0]);
+                        setRoomId(null);
+                      }}
+                      className={cn(
+                        "rounded border px-2.5 py-1 text-left text-[10px] font-semibold uppercase tracking-wider backdrop-blur",
+                        level === deck
+                          ? "border-primary/60 bg-primary/15 text-primary"
+                          : "border-border bg-[#060B14]/70 text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      Deck {deck + 1}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setDeckView((v) => (v === "walk" ? "deck" : "walk"))}
+                    className={cn(
+                      "rounded border px-2.5 py-1 text-left text-[10px] font-semibold uppercase tracking-wider backdrop-blur",
+                      deckView === "deck"
+                        ? "border-primary/60 bg-primary/15 text-primary"
+                        : "border-border bg-[#060B14]/70 text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {deckView === "walk" ? "Deck plan" : "Walk mode"}
+                  </button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-1 text-[10px]"
+                    onClick={leaveInterior}
+                  >
+                    Exit to apron
+                  </Button>
+                </div>
+              )}
+
+              {/* Walk mode plate */}
+              {interior && deckView === "walk" && (
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
+                  {locked ? (
+                    <div className="relative flex size-10 items-center justify-center">
+                      <span className="absolute h-px w-8 bg-primary/70" />
+                      <span className="absolute h-8 w-px bg-primary/70" />
+                      <span className="size-1.5 rounded-full bg-primary" />
+                    </div>
+                  ) : (
+                    <div className="rounded border border-border bg-[#060B14]/90 px-5 py-4 text-center backdrop-blur">
+                      <div className="flex items-center justify-center gap-2 font-display text-sm font-bold uppercase tracking-wider text-foreground">
+                        <Footprints className="size-4 text-primary" />
+                        Click anywhere to look around
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                        WASD to move - mouse to look - Shift to sprint - Space to jump -
+                        doors open as you approach - click objects with the crosshair -
+                        Esc to release the pointer
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Teleport menu */}
+              <TeleportMenu
+                open={teleportOpen}
+                targets={teleportTargets}
+                onTeleport={applyTarget}
+                onClose={() => setTeleportOpen(false)}
+              />
+
+              {/* Mini-map */}
+              <div className="absolute bottom-3 right-3 w-56">
+                <MiniMap
+                  slug={slug}
+                  mode={underwater ? "underwater" : interior ? "interior" : "exterior"}
+                  level={level}
+                  position={position}
+                  activeWater={activeWater}
+                  onTeleport={applyTarget}
+                />
+              </div>
+
               {/* Legend */}
-              <div className="absolute bottom-3 left-3 flex items-center gap-3 rounded border border-border bg-[#060B14]/70 px-3 py-1.5 backdrop-blur">
+              <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-3 rounded border border-border bg-[#060B14]/70 px-3 py-1.5 backdrop-blur">
                 <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                   <span className="size-2 rounded-full bg-[#00E0C6]" /> Hotspot
                 </span>
                 <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span className="size-2 rounded-full bg-[#FF3B47]" /> Selected
+                  <span className="size-2 rounded-full bg-[#FFB020]" /> Airlock and AI forecast
                 </span>
                 <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span className="size-2 rounded-full bg-[#FFB020]" /> AI forecast
+                  <span className="size-2 rounded-full bg-[#FF3B47]" /> Selected
                 </span>
                 <span className="cc-mono text-[10px] text-muted-foreground">
-                  {isometric ? "click a room block" : "drag to orbit - scroll to zoom"}
+                  {underwater
+                    ? "dive active - return to surface from the water panel"
+                    : interior
+                      ? deckView === "walk"
+                        ? "walking"
+                        : "deck plan"
+                      : "drag to orbit - scroll to zoom"}
                 </span>
               </div>
 
               {/* Mode hint */}
-              <div className="absolute bottom-3 right-3 max-w-[240px] rounded border border-border bg-[#060B14]/80 px-3 py-1.5 backdrop-blur">
+              <div className="absolute bottom-24 left-3 max-w-[240px] rounded border border-border bg-[#060B14]/80 px-3 py-1.5 backdrop-blur">
                 <div className="cc-label text-[9px]">
-                  {isometric ? "2.5D isometric cutaway" : activeMode.label}
+                  {underwater
+                    ? "Underwater view"
+                    : interior
+                      ? plan?.name ?? "Interior"
+                      : view === "isometric"
+                        ? "2.5D isometric cutaway"
+                        : activeMode.label}
                 </div>
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  {isometric
-                    ? "Terrain as flat tiles with each room extruded as a cutaway block and live data floating above it."
-                    : activeMode.hint}
+                  {underwater
+                    ? `${submergedBody?.name}: seabed relief, boulders, fish, bubbles and the submerged intake line.`
+                    : interior
+                      ? `Click any fixture inside the room to open its detail panel. ${plan?.rooms.length ?? 0} rooms on this deck.`
+                      : view === "isometric"
+                        ? "Terrain as flat tiles with each room extruded as a cutaway block and live data floating above it."
+                        : activeMode.hint}
                 </p>
               </div>
             </div>
@@ -390,54 +864,183 @@ export default function Twin() {
 
           {/* Right rail */}
           <div className="space-y-4">
+            {water && !underwater && (
+              <WaterPanel
+                def={water}
+                live={liveWater}
+                trackers={trackedWater === water.id}
+                submerged={false}
+                lakesOpen={lakesOpen}
+                onClose={() => {
+                  setActiveWater(null);
+                  setTrackedWater(null);
+                }}
+                onAction={(action) => onWaterAction(water.id, action)}
+              />
+            )}
+
+            {underwater && submergedBody && (
+              <WaterPanel
+                def={submergedBody}
+                live={liveWater}
+                trackers={trackedWater === submergedBody.id}
+                submerged
+                lakesOpen={lakesOpen}
+                onClose={() => setSubmergedWater(null)}
+                onAction={(action) => onWaterAction(submergedBody.id, action)}
+              />
+            )}
+
+            {vehicle && (
+              <VehiclePanel
+                vehicle={vehicle}
+                running={
+                  runningVehicles.includes(vehicle.id) || vehicle.running
+                }
+                onToggleEngine={() => toggleEngine(vehicle.id)}
+                onClose={() => setActiveVehicle(null)}
+              />
+            )}
+
+            {interior && room && plan && (
+              <RoomPanel
+                slug={slug}
+                room={room}
+                level={level}
+                lightsOn
+                crewHere={crewHere}
+                onLevel={(next) => {
+                  const nextPlan = floorPlan(slug, next);
+                  setLevel(next);
+                  setSpawn(nextPlan?.spawn ?? [0, 1.7, 0]);
+                  setRoomId(null);
+                }}
+                onClose={() => setRoomId(null)}
+              />
+            )}
+
+            {inspect && (
+              <ObjectPanel
+                target={inspect}
+                readings={readings}
+                onClose={() => setInspect(null)}
+              />
+            )}
+
+            {lakesOpen && slug === "bharati" && (
+              <LakesOverlay
+                lakes={stationWater("bharati").filter((b) => b.kind === "lakelet")}
+                onSelect={(id) => {
+                  setActiveWater(id);
+                  const body = WATER_BODIES[id];
+                  setPosition({ x: body?.position[0] ?? 0, z: body?.position[1] ?? 0, yaw: 0 });
+                }}
+                onClose={() => setLakesOpen(false)}
+              />
+            )}
+
+            {!water && !vehicle && !inspect && !underwater && !room && (
+              <Card className="cc-panel border-border shadow-none">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wider">
+                    <Box className="size-4 text-primary" />
+                    World interaction
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-xs leading-relaxed text-muted-foreground">
+                  <p>
+                    Click the amber airlock on the station to walk inside, or any water surface,
+                    vehicle, hotspot or crew member to open its record.
+                  </p>
+                  <div className="flex items-center justify-between rounded border border-border bg-card px-3 py-2">
+                    <span className="flex items-center gap-1.5">
+                      <Thermometer className="size-3 text-primary" />
+                      Sun
+                    </span>
+                    <span className="cc-mono text-[10px] text-foreground">
+                      {time.clockLabel} - {time.label} - {time.altitude.toFixed(1)} deg
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded border border-border bg-card px-3 py-2">
+                    <span className="flex items-center gap-1.5">
+                      <Footprints className="size-3 text-primary" />
+                      Interiors
+                    </span>
+                    <span className="cc-mono text-[10px] text-foreground">
+                      2 decks - {floorPlan(slug, 0)?.rooms.length ?? 0} +{" "}
+                      {floorPlan(slug, 1)?.rooms.length ?? 0} rooms
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded border border-border bg-card px-3 py-2">
+                    <span className="flex items-center gap-1.5">
+                      <Radio className="size-3 text-primary" />
+                      Water bodies
+                    </span>
+                    <span className="cc-mono text-[10px] text-foreground">
+                      {stationWater(slug).length} clickable
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Time of day */}
             <Card className="cc-panel border-border shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wider">
-                  <Box className="size-4 text-primary" />
-                  Hotspot detail
+                  <Thermometer className="size-4 text-primary" />
+                  Time of day and season
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {!active ? (
-                  <p className="text-sm text-muted-foreground">
-                    Click a cyan marker in the scene to inspect that part of the station.
-                  </p>
-                ) : (
-                  <>
-                    <div className="font-display text-sm font-bold uppercase tracking-wider text-foreground">
-                      {HOTSPOT_INFO[active]?.name ?? active}
-                    </div>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      {HOTSPOT_INFO[active]?.info ?? "Station subsystem."}
-                    </p>
-                    {liveChannels.length > 0 && (
-                      <div className="space-y-2 border-t border-border pt-2">
-                        {liveChannels.map((r) => {
-                          const cls = statusClasses(r.status);
-                          return (
-                            <div
-                              key={r.equipmentId + r.parameter}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <span className="truncate text-xs text-muted-foreground">
-                                {r.parameter}
-                              </span>
-                              <span className={cn("cc-mono text-sm", cls.text)}>
-                                {r.value.toFixed(r.decimals)}
-                                {r.unit}
-                              </span>
-                            </div>
-                          );
-                        })}
-                        {readingsRaw && readingsRaw.length > 0 && (
-                          <div className="cc-mono text-[10px] text-muted-foreground">
-                            as of {formatAge(Math.max(...readingsRaw.map((r) => r.timestamp)))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
+              <CardContent className="space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Local solar clock</span>
+                  <span className="cc-mono text-lg text-foreground">{time.clockLabel}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={1439}
+                  value={time.minutes}
+                  onChange={(e) => time.setMinutes(Number(e.target.value))}
+                  className="w-full accent-[#00E0C6]"
+                  aria-label="Hour of day"
+                />
+                <div className="flex items-center gap-1">
+                  {(["summer", "shoulder", "winter"] as Season[]).map((option) => (
+                    <Button
+                      key={option}
+                      size="sm"
+                      variant="outline"
+                      className={cn(
+                        "flex-1 text-[10px] capitalize",
+                        time.season === option && "border-primary/60 text-primary",
+                      )}
+                      onClick={() => time.setSeason(option)}
+                    >
+                      {option}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{time.label}</span>
+                  <Badge variant="outline" className="text-[10px]">
+                    {time.night ? "dark" : "lit"}
+                  </Badge>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={cn("w-full text-xs", time.timelapse && "border-primary/60 text-primary")}
+                  onClick={time.toggleTimelapse}
+                >
+                  {time.timelapse ? "Stop 24 hour timelapse" : "Run 24 hour timelapse"}
+                </Button>
+                <p className="text-[10px] leading-relaxed text-muted-foreground">
+                  The sun follows real solar geometry for {latitude.toFixed(2)} degrees latitude,
+                  so summer gives the midnight sun, winter gives the polar night, and the aurora
+                  fades out under the summer sky.
+                </p>
               </CardContent>
             </Card>
 
@@ -471,9 +1074,7 @@ export default function Twin() {
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-muted-foreground">Confidence</span>
-                      <span className="cc-mono text-lg text-[#FFB020]">
-                        {blackout.confidence}%
-                      </span>
+                      <span className="cc-mono text-lg text-[#FFB020]">{blackout.confidence}%</span>
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-muted-foreground">Risk level</span>
@@ -575,19 +1176,49 @@ export default function Twin() {
                           <span className="text-muted-foreground">
                             {SUBSYSTEM_LABELS[sub] ?? sub}
                           </span>
-                          <Badge
-                            variant="outline"
-                            className={cn("text-[10px] uppercase", cls.text, cls.border)}
-                          >
+                          <Badge variant="outline" className={cn("text-[10px] uppercase", cls.text, cls.border)}>
                             {worst}
                           </Badge>
                         </div>
                       );
                     })}
+                    {readingsRaw.length > 0 && (
+                      <div className="cc-mono pt-1 text-[10px] text-muted-foreground">
+                        as of {formatAge(Math.max(...readingsRaw.map((r) => r.timestamp)))}
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
             </Card>
+
+            {active && HOTSPOT_INFO[active] && (
+              <Card className="cc-panel border-border shadow-none">
+                <CardHeader className="pb-2">
+                  <CardTitle className="font-display text-sm font-bold uppercase tracking-wider">
+                    {HOTSPOT_INFO[active].name}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-xs leading-relaxed text-muted-foreground">
+                  <p>{HOTSPOT_INFO[active].info}</p>
+                  {HOTSPOT_INFO[active].equipmentId && (
+                    <div className="space-y-1 border-t border-border pt-2">
+                      {readings
+                        .filter((r) => r.equipmentId === HOTSPOT_INFO[active].equipmentId)
+                        .map((r) => (
+                          <div key={r.parameter} className="flex items-center justify-between gap-2">
+                            <span className="truncate text-muted-foreground">{r.parameter}</span>
+                            <span className={cn("cc-mono text-sm", statusClasses(r.status).text)}>
+                              {r.value.toFixed(r.decimals)}
+                              {r.unit}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
 
@@ -644,8 +1275,8 @@ export default function Twin() {
             <CardContent>
               {!reconciliation ? (
                 <p className="text-xs text-muted-foreground">
-                  No reconciliation yet. Run a continuity drill to compare the model forecast
-                  with the coverage measured during the outage.
+                  No reconciliation yet. Run a continuity drill to compare the model forecast with
+                  the coverage measured during the outage.
                 </p>
               ) : (
                 <div className="space-y-3 text-xs">
@@ -692,7 +1323,7 @@ export default function Twin() {
               Vehicle fleet - {fleetCount(slug)} units in {FLEET[slug]?.length ?? 0} classes
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {VEHICLE_CLASSES.map((cls) => {
                 const entry = (FLEET[slug] ?? []).find((f) => f.id === cls.id);
@@ -708,9 +1339,49 @@ export default function Twin() {
                 );
               })}
             </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {vehicleInstances(slug).map((unit) => (
+                <button
+                  key={unit.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveVehicle(unit.id);
+                    setInspect(null);
+                  }}
+                  className={cn(
+                    "flex items-center justify-between gap-2 rounded border px-3 py-2 text-left transition-colors",
+                    activeVehicle === unit.id
+                      ? "border-primary/60 bg-primary/10"
+                      : "border-border bg-card hover:border-primary/40",
+                  )}
+                >
+                  <span className="truncate text-xs text-foreground">{unit.tail}</span>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="size-2 rounded-full"
+                      style={{
+                        background:
+                          unit.status === "operational"
+                            ? "#3EE07F"
+                            : unit.status === "standby"
+                              ? "#4A9EFF"
+                              : unit.status === "maintenance"
+                                ? "#FFB020"
+                                : "#00E0C6",
+                      }}
+                    />
+                    <span className="cc-mono text-[10px] text-muted-foreground">
+                      {unit.fuelPercent}%
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
     </AppShell>
   );
 }
+
+
