@@ -98,6 +98,7 @@ export function LiveChart({
   unit,
   status,
   height = 280,
+  predicted = true,
 }: {
   slug: StationSlug;
   equipmentId: string;
@@ -106,6 +107,13 @@ export function LiveChart({
   unit: string;
   status: string;
   height?: number;
+  /**
+   * Overlay the AI continuity forecast: a dotted orange projection of the
+   * channel computed from the trailing trend. During a predicted or active
+   * satellite blackout the measured line stops and the forecast carries on.
+   * Enabled on every telemetry chart by default.
+   */
+  predicted?: boolean;
 }) {
   const history = useQuery(api.telemetry.getSensorHistory, {
     slug,
@@ -132,11 +140,44 @@ export function LiveChart({
     );
   }
 
-  const data = history.map((h) => ({
-    time: formatTimeShort(h.timestamp),
-    value: h.value,
-  }));
-  const values = history.map((h) => h.value);
+  const data: Array<{ time: string; value: number | null; predicted: number | null }> =
+    history.map((h) => ({
+      time: formatTimeShort(h.timestamp),
+      value: h.value,
+      predicted: null,
+    }));
+
+  if (predicted && history.length >= 4) {
+    // Least-squares extrapolation over the trailing window, anchored on the
+    // newest real sample so the forecast continues the measured line.
+    const tail = history.slice(-12);
+    const meanX = (tail.length - 1) / 2;
+    const meanY = tail.reduce((a, b) => a + b.value, 0) / tail.length;
+    let num = 0;
+    let den = 0;
+    tail.forEach((point, i) => {
+      num += (i - meanX) * (point.value - meanY);
+      den += (i - meanX) ** 2;
+    });
+    const slope = den === 0 ? 0 : num / den;
+    const last = history[history.length - 1];
+    data[data.length - 1].predicted = last.value;
+    const stepMs =
+      history.length > 1
+        ? last.timestamp - history[history.length - 2].timestamp
+        : 10_000;
+    for (let k = 1; k <= 12; k += 1) {
+      data.push({
+        time: formatTimeShort(last.timestamp + k * stepMs),
+        value: null,
+        predicted: Math.round((last.value + slope * k) * 1000) / 1000,
+      });
+    }
+  }
+
+  const values = data
+    .flatMap((d) => [d.value, d.predicted])
+    .filter((v): v is number => typeof v === "number");
   const lo = Math.min(...values, ...(thresholds.critLow !== undefined ? [thresholds.critLow] : []), ...(thresholds.warnLow !== undefined ? [thresholds.warnLow] : []));
   const hi = Math.max(...values, ...(thresholds.critHigh !== undefined ? [thresholds.critHigh] : []), ...(thresholds.warnHigh !== undefined ? [thresholds.warnHigh] : []));
   const pad = Math.max((hi - lo) * 0.15, 0.5);
@@ -201,7 +242,20 @@ export function LiveChart({
             strokeWidth={2}
             dot={false}
             isAnimationActive={false}
+            connectNulls={false}
           />
+          {predicted && (
+            <Line
+              type="monotone"
+              dataKey="predicted"
+              stroke="#FFB020"
+              strokeWidth={2}
+              strokeDasharray="4 4"
+              dot={false}
+              isAnimationActive={false}
+              connectNulls
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -396,6 +450,7 @@ export default function Dashboard() {
                       r.sensorId === featured.sensorId,
                   )?.status ?? "nominal"
                 }
+                predicted
               />
             </CardContent>
           </Card>

@@ -18,9 +18,13 @@ export interface TwinHotspotDef {
   info: string;
 }
 
+import type { ViewMode } from "./view-modes";
+
 /** Props every station scene component accepts. */
 export interface TwinSceneProps {
   readings: SensorSummary[];
   onSelect: (hotspotId: string) => void;
   activeHotspot: string | null;
+  /** Active display mode; defaults to the photographic exterior view. */
+  viewMode?: ViewMode;
 }

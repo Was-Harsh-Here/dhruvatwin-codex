@@ -19,6 +19,16 @@ const Catalog = lazy(() => import("./pages/Catalog.tsx"));
 const EquipmentDetail = lazy(() => import("./pages/EquipmentDetail.tsx"));
 const Workspace = lazy(() => import("./pages/Workspace.tsx"));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
+const StationOps = lazy(() => import("./pages/StationOps.tsx"));
+const Microgrid = lazy(() => import("./pages/Microgrid.tsx"));
+const EnvironmentPage = lazy(() => import("./pages/Environment.tsx"));
+const Antarctica = lazy(() => import("./pages/Antarctica.tsx"));
+const Weather = lazy(() => import("./pages/Weather.tsx"));
+const Library = lazy(() => import("./pages/Library.tsx"));
+const Compliance = lazy(() => import("./pages/Compliance.tsx"));
+const Expeditions = lazy(() => import("./pages/Expeditions.tsx"));
+const Audit = lazy(() => import("./pages/Audit.tsx"));
+const AntarcticMode = lazy(() => import("./pages/AntarcticMode.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -201,6 +211,116 @@ createRoot(document.getElementById("root")!).render(
                     description="Platform administration is limited to administrator accounts."
                   >
                     <Admin />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/station"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the station dashboard"
+                    description="Personnel rosters, badge state and the duty board are available to signed-in operators."
+                  >
+                    <StationOps />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/microgrid"
+                element={
+                  <RequireAuth
+                    title="Sign in to open Microgrid Command"
+                    description="Plant load, generation and thermal recovery are available to signed-in operators."
+                  >
+                    <Microgrid />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/environment"
+                element={
+                  <RequireAuth
+                    title="Sign in to open Local Environment"
+                    description="Ice velocity, weather series and satellite passes are available to signed-in operators."
+                  >
+                    <EnvironmentPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/antarctica"
+                element={
+                  <RequireAuth
+                    title="Sign in to open Antarctica Overview"
+                    description="The station network picture is available to signed-in operators."
+                  >
+                    <Antarctica />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/weather"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the weather extension"
+                    description="Open-Meteo forecast and reanalysis for both stations require an account."
+                  >
+                    <Weather />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/library"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the NCPOR Library"
+                    description="Treaty, policy, standards and field manuals are available to signed-in operators."
+                  >
+                    <Library />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/compliance"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the NPDC Compliance Centre"
+                    description="Metadata validation and dataset publication require an account."
+                  >
+                    <Compliance />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/expeditions"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the expedition logs"
+                    description="The ISEA expedition series is available to signed-in operators."
+                  >
+                    <Expeditions />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/audit"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the audit trail"
+                    description="The hash-chained command log is available to signed-in operators."
+                  >
+                    <Audit />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/antarctic"
+                element={
+                  <RequireAuth
+                    title="Sign in to open Antarctic Mode"
+                    description="The high-contrast field interface and SOS channel require a station account."
+                  >
+                    <AntarcticMode />
                   </RequireAuth>
                 }
               />

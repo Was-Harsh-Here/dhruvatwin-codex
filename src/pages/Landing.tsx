@@ -12,11 +12,21 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  BookOpen,
   Box,
+  ClipboardList,
+  Cpu,
+  FileCheck2,
+  Globe2,
   Layers,
   PenSquare,
+  Radio,
+  Shield,
   Snowflake,
   Thermometer,
+  Truck,
+  Users,
+  Wind,
 } from "lucide-react";
 import { Link } from "react-router";
 
@@ -177,11 +187,12 @@ export default function Landing() {
               Antarctic stations
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-              DhruvaTwin Platform mirrors Maitri and Bharati in software: interactive 3D
-              station twins, a live sensor grid, automated alert triage and an open
-              equipment catalog that partner organisations can explore and contribute to.
-              Built for NCPOR, Ministry of Earth Sciences, and the research community
-              that depends on it.
+              DhruvaTwin Platform mirrors Maitri and Bharati in software: separate 3D twins
+              with seven engineering view modes and a 2.5D cutaway, a live sensor grid,
+              automated alert triage, an AI continuity engine that predicts satellite
+              blackouts, Antarctic Mode for ground staff, and an offline-first MQTT link that
+              keeps reporting through a katabatic outage. Built for NCPOR, Ministry of Earth
+              Sciences, and the research community that depends on it.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Button asChild size="lg" className="cursor-pointer">
@@ -203,33 +214,83 @@ export default function Landing() {
             {[
               {
                 icon: Box,
-                title: "Interactive 3D twins",
-                body: "Explore scale models of Maitri and Bharati with clickable hotspots, camera presets and live telemetry streamed into the scene.",
+                title: "Separate station twins",
+                body: "Maitri and Bharati are distinct 3D scenes with lake, fjord and bay water bodies, 100 plus objects each and clickable hotspots wired to live telemetry.",
+              },
+              {
+                icon: Layers,
+                title: "Seven view modes",
+                body: "Exterior, X-Ray, Infrared, Thermal, MEP/HVAC, Structural and Night, plus a 2.5D isometric cutaway with rooms, occupancy and data overlays.",
+              },
+              {
+                icon: Cpu,
+                title: "AI blackout predictor",
+                body: "A continuity engine forecasts the next satellite link drop with confidence, and a 60 second drill reconciles predicted against measured coverage.",
+              },
+              {
+                icon: Radio,
+                title: "MQTT and offline queue",
+                body: "Telemetry, alerts and field traffic publish to broker.hivemq.com, buffered in an IndexedDB queue ranked SOS, Critical, Check-in, Routine.",
+              },
+              {
+                icon: Snowflake,
+                title: "Antarctic Mode",
+                body: "A separate high-contrast interface for ground staff: pure black, 18 point body text, 64 pixel targets and a 200 pixel SOS control.",
               },
               {
                 icon: Activity,
                 title: "Live sensor grid",
-                body: "Twenty-plus telemetry channels per station refresh every ten seconds, with threshold bands and status on every reading.",
+                body: "Twenty-plus telemetry channels per station refresh every ten seconds, with threshold bands and status carried on every reading.",
               },
               {
                 icon: AlertTriangle,
-                title: "Automated alert triage",
-                body: "Threshold breaches raise incidents instantly. Acknowledge, work, and resolve with a full audit of who did what and when.",
+                title: "Alert triage matrix",
+                body: "An incident matrix breaks open alerts out by subsystem and severity. Acknowledge, work and resolve with provenance on every action.",
               },
               {
-                icon: Layers,
-                title: "Open equipment catalog",
-                body: "A searchable registry of every instrumented system, each with its own live detail page, history and operator discussion.",
+                icon: Wind,
+                title: "Weather and environment",
+                body: "Open-Meteo forecast and reanalysis charted for both stations, with the local ice velocity field and the satellite pass schedule.",
+              },
+              {
+                icon: Users,
+                title: "Roster and microgrid",
+                body: "Personnel badges, UHF channels and duty shifts alongside CHP load, thermal recovery, storage state of charge and plant advisories.",
+              },
+              {
+                icon: Globe2,
+                title: "Antarctica overview",
+                body: "All four Indian sites on one sector map: Maitri, Bharati, Dakshin Gangotri and the planned Maitri-II, 3,098 km apart.",
+              },
+              {
+                icon: BookOpen,
+                title: "NCPOR library",
+                body: "Treaty instruments, Ministry policy, NPDC data standards, field manuals and scientific reports, tagged and searchable.",
+              },
+              {
+                icon: FileCheck2,
+                title: "NPDC dataset export",
+                body: "Metadata is auto-tagged with CF standard names and GCMD keywords, validated against the submission standard and written to the audit chain.",
+              },
+              {
+                icon: ClipboardList,
+                title: "Expedition logs",
+                body: "The full ISEA series from 1981-82 to the current season with the hosting station, programme focus and personnel strength.",
+              },
+              {
+                icon: Shield,
+                title: "Audit trail",
+                body: "A rolling hash chain over every command. Recomputed digests detect any edit, insertion or reordering of history.",
+              },
+              {
+                icon: Truck,
+                title: "Vehicle fleet",
+                body: "Twelve vehicle classes modelled in the twins, from PistenBully snow vehicles and cargo carriers to the helicopter and the Zodiac boat.",
               },
               {
                 icon: PenSquare,
                 title: "Community contributions",
-                body: "Partner organisations publish field observations, maintenance logs and questions, and discuss them right on the equipment page.",
-              },
-              {
-                icon: Thermometer,
-                title: "Thermal survivability",
-                body: "The heated Lake Priyadarshini pipeline and habitat loops are tracked so a freeze event is caught in minutes, not hours.",
+                body: "Partner organisations publish field observations, maintenance logs and questions, and discuss them on the equipment page, with a Groq-powered assistant on tap.",
               },
             ].map((f, i) => (
               <motion.div
@@ -276,7 +337,7 @@ export default function Landing() {
                   </div>
                 </div>
                 <Separator className="hidden w-px sm:block" orientation="vertical" />
-                <div className="flex items-center gap-6 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground">
                   <span>
                     <span className="cc-mono block text-base text-foreground">26060</span>
                     Problem Statement ID
@@ -288,6 +349,18 @@ export default function Landing() {
                   <span>
                     <span className="cc-mono block text-base text-foreground">2</span>
                     Stations instrumented
+                  </span>
+                  <span>
+                    <span className="cc-mono block text-base text-foreground">16</span>
+                    Command screens
+                  </span>
+                  <span>
+                    <span className="cc-mono block text-base text-foreground">46</span>
+                    Expeditions logged
+                  </span>
+                  <span>
+                    <span className="cc-mono block text-base text-foreground">12</span>
+                    Vehicle classes
                   </span>
                 </div>
               </CardContent>

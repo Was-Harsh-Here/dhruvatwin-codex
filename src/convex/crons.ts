@@ -13,4 +13,14 @@ crons.interval(
   internal.telemetry.simulateTick,
 );
 
+/**
+ * Microgrid, weather and satellite-pass simulation every 60 seconds. Kept on
+ * a slower cadence than the sensor tick because these are plant-level series.
+ */
+crons.interval(
+  "operations simulation tick",
+  { seconds: 60 },
+  internal.ops.simulateOpsTick,
+);
+
 export default crons;

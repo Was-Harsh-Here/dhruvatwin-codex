@@ -11,9 +11,13 @@ import {
   Snowfall,
   Stars,
   Terrain,
+  ThermalReadout,
   TWIN_COLORS,
   type TwinSceneProps,
 } from "./twin-primitives";
+import { VehicleFleet } from "./VehicleFleet";
+import { MAITRI_MEP, MepOverlay } from "./MepOverlay";
+import { ViewModeEffect, modeLighting } from "./view-modes";
 
 /* ------------------------------------------------------------------ */
 /* Reusable building blocks                                            */
@@ -21,18 +25,22 @@ import {
 
 /** Sloped-roof main station on pillars with lit windows and orange trim. */
 function MainStation({ onInfo }: { onInfo: () => void }) {
+  // 24 windows across two decks.
   const windows = useMemo(
     () =>
-      Array.from({ length: 20 }, (_, i) => ({
-        x: -14 + (i % 10) * 3.1,
-        y: 3.2 + Math.floor(i / 10) * 2.6,
-        z: i < 10 ? 10.05 : -10.05,
-        rotY: i < 10 ? 0 : Math.PI,
+      Array.from({ length: 24 }, (_, i) => ({
+        x: -14.9 + (i % 12) * 2.72,
+        y: 3.3 + Math.floor(i / 12) * 2.5,
+        z: i < 12 ? 10.05 : -10.05,
+        rotY: i < 12 ? 0 : Math.PI,
       })),
     [],
   );
   return (
-    <group onClick={(e) => { e.stopPropagation(); onInfo(); }}>
+    <group
+      userData={{ structural: true }}
+      onClick={(e) => { e.stopPropagation(); onInfo(); }}
+    >
       {/* 8 pillars */}
       {[
         [-15, -7], [-5, -7], [5, -7], [15, -7],
@@ -368,6 +376,159 @@ function FuelStation() {
   );
 }
 
+/** Vehicle garage and maintenance workshop east of the pads. */
+function Garage() {
+  return (
+    <group position={[58, 0, -40]} rotation={[0, -0.12, 0]}>
+      <mesh position={[0, 2.4, 0]}>
+        <boxGeometry args={[14, 4.8, 10]} />
+        <meshStandardMaterial color={TWIN_COLORS.steelWhite} {...MAT.metal} />
+      </mesh>
+      <mesh position={[0, 5.05, 0]}>
+        <boxGeometry args={[14.6, 0.5, 10.6]} />
+        <meshStandardMaterial color={TWIN_COLORS.trimOrange} {...MAT.metal} />
+      </mesh>
+      {[-4.2, 0, 4.2].map((x) => (
+        <mesh key={x} position={[x, 1.9, 5.02]}>
+          <boxGeometry args={[3.4, 3.6, 0.12]} />
+          <meshStandardMaterial color="#4A555F" {...MAT.metal} />
+        </mesh>
+      ))}
+      {/* roof-mounted exhaust extraction */}
+      {[-4, 4].map((x) => (
+        <mesh key={`v${x}`} position={[x, 6.2, -3]}>
+          <cylinderGeometry args={[0.45, 0.45, 2.2, 10]} />
+          <meshStandardMaterial color={TWIN_COLORS.pole} {...MAT.metal} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** Helipad apron with approach markings and perimeter lights. */
+function Helipad() {
+  return (
+    <group position={[74, 0, -30]}>
+      <mesh position={[0, 0.16, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[7.5, 28]} />
+        <meshStandardMaterial color="#2A333C" {...MAT.snow} />
+      </mesh>
+      <mesh position={[0, 0.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[6.6, 7.2, 32]} />
+        <meshStandardMaterial color="#E8EEF4" side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0, 0.21, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.7, 4.4]} />
+        <meshStandardMaterial color="#E8EEF4" side={THREE.DoubleSide} />
+      </mesh>
+      {[0.35, 1].map((a, i) => (
+        <mesh key={i} position={[Math.cos(a * 6.28) * 1.3, 0.21, Math.sin(a * 6.28) * 1.1]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.7, 4.4]} />
+          <meshStandardMaterial color="#E8EEF4" side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+      {Array.from({ length: 8 }, (_, i) => {
+        const angle = (i / 8) * Math.PI * 2;
+        return (
+          <mesh key={`l${i}`} position={[Math.cos(angle) * 7.8, 0.3, Math.sin(angle) * 7.8]}>
+            <sphereGeometry args={[0.2, 8, 8]} />
+            <meshStandardMaterial color={TWIN_COLORS.amber} emissive={TWIN_COLORS.amber} emissiveIntensity={1.6} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+/** Cargo yard: eight containerised stores with roof ribs. */
+function CargoYard() {
+  return (
+    <group position={[42, 0, -50]} rotation={[0, 0.08, 0]}>
+      {Array.from({ length: 8 }, (_, i) => (
+        <group key={i} position={[(i % 4) * 6.6, 0, Math.floor(i / 4) * 3.4]}>
+          <mesh position={[0, 1.4, 0]}>
+            <boxGeometry args={[6, 2.8, 2.8]} />
+            <meshStandardMaterial
+              color={i % 3 === 0 ? TWIN_COLORS.moduleRed : i % 3 === 1 ? "#2F6B8C" : TWIN_COLORS.steelWhite}
+              {...MAT.metal}
+            />
+          </mesh>
+          <mesh position={[0, 2.85, 0]}>
+            <boxGeometry args={[6.1, 0.2, 2.9]} />
+            <meshStandardMaterial color={TWIN_COLORS.pole} {...MAT.metal} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** Waste incinerator with stack. */
+function Incinerator() {
+  return (
+    <group position={[-2, 0, -46]}>
+      <mesh position={[0, 1.5, 0]}>
+        <boxGeometry args={[4, 3, 4]} />
+        <meshStandardMaterial color="#5B6670" {...MAT.metal} />
+      </mesh>
+      <mesh position={[1, 5, -1]}>
+        <cylinderGeometry args={[0.4, 0.5, 6, 10]} />
+        <meshStandardMaterial color={TWIN_COLORS.pole} {...MAT.metal} />
+      </mesh>
+      <mesh position={[0, 3.3, 0]}>
+        <boxGeometry args={[4.4, 0.4, 4.4]} />
+        <meshStandardMaterial color={TWIN_COLORS.trimOrange} {...MAT.metal} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Meteorological balloon shed and launch frame. */
+function BalloonShed() {
+  return (
+    <group position={[-20, 0, -40]} rotation={[0, 0.22, 0]}>
+      <mesh position={[0, 1.8, 0]}>
+        <boxGeometry args={[7, 3.6, 5]} />
+        <meshStandardMaterial color={TWIN_COLORS.moduleWhite} {...MAT.metal} />
+      </mesh>
+      {/* curved roof */}
+      <mesh position={[0, 3.9, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[3.6, 3.6, 7, 14, 1, false, 0, Math.PI]} />
+        <meshStandardMaterial color={TWIN_COLORS.steelWhite} {...MAT.metal} />
+      </mesh>
+      <mesh position={[4.4, 3.2, 0]} rotation={[0, 0, -Math.PI / 2]}>
+        <cylinderGeometry args={[0.11, 0.11, 6.4, 6]} />
+        <meshStandardMaterial color={TWIN_COLORS.pole} {...MAT.metal} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Wind-carved sastrugi ridges across the station apron. */
+function Sastrugi() {
+  const ridges = useMemo(
+    () =>
+      Array.from({ length: 16 }, (_, i) => ({
+        x: -140 + ((i * 53) % 320),
+        z: -120 + ((i * 41) % 260),
+        rot: (i * 0.37) % Math.PI,
+        len: 8 + ((i * 7) % 16),
+        h: 0.5 + ((i * 3) % 7) * 0.16,
+      })),
+    [],
+  );
+  return (
+    <group>
+      {ridges.map((r, i) => (
+        <mesh key={i} position={[r.x, r.h / 2, r.z]} rotation={[0, r.rot, 0]}>
+          <boxGeometry args={[r.len, r.h, 1.6]} />
+          <meshStandardMaterial color="#E6EFF5" {...MAT.snow} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* The assembled Maitri scene                                          */
 /* ------------------------------------------------------------------ */
@@ -377,22 +538,39 @@ function FuelStation() {
  * heated pipeline, fuel farm, four generators, weather mast, summer camp,
  * Schirmacher hills, windsock toward Novo airfield, aurora, stars and snow.
  */
-export function MaitriScene({ readings, onSelect, activeHotspot }: TwinSceneProps) {
+/** Thermal readout targets for Maitri. */
+const MAITRI_THERMAL: Array<{ tag: string; position: [number, number, number] }> = [
+  { tag: "HAB-MAITRI", position: [0, 13, 0] },
+  { tag: "PIPE-MAITRI", position: [-19, 6, 14] },
+  { tag: "GEN-1", position: [16, 6, -26] },
+  { tag: "FUEL-MAITRI", position: [42, 13, 30] },
+  { tag: "AWS-MAITRI", position: [-8, 21, -30] },
+  { tag: "VSAT-MAITRI", position: [24, 16, -6] },
+];
+
+export function MaitriScene({
+  readings,
+  onSelect,
+  activeHotspot,
+  viewMode = "exterior",
+}: TwinSceneProps) {
   const find = (tag: string) => readings.find((r) => r.equipmentId === tag);
 
   return (
     <group>
       <Terrain
-        size={520}
+        size={800}
         rises={[
-          { x: -180, z: -160, r: 190, h: 7 },
-          { x: 170, z: -190, r: 150, h: 5 },
+          { x: -240, z: -220, r: 260, h: 9 },
+          { x: 230, z: -260, r: 210, h: 6 },
+          { x: -120, z: 300, r: 180, h: 4 },
+          { x: 300, z: 240, r: 170, h: 5 },
         ]}
       />
-      <Lighting />
-      <Stars count={500} />
-      <Aurora z={-170} />
-      <Snowfall count={900} spread={240} />
+      <Lighting {...modeLighting(viewMode)} />
+      <Stars count={800} />
+      <Aurora z={-240} />
+      <Snowfall count={5000} spread={320} />
       <GroundShadow />
 
       <MainStation onInfo={() => onSelect("main-station")} />
@@ -406,6 +584,18 @@ export function MaitriScene({ readings, onSelect, activeHotspot }: TwinSceneProp
       <RockHills />
       <FuelStation />
       <AntennaMast />
+      <Garage />
+      <Helipad />
+      <CargoYard />
+      <Incinerator />
+      <BalloonShed />
+      <Sastrugi />
+      <VehicleFleet station="maitri" />
+
+      {viewMode === "mep" && <MepOverlay {...MAITRI_MEP} />}
+      {viewMode === "thermal" && (
+        <ThermalReadout targets={MAITRI_THERMAL} readings={readings} />
+      )}
 
       {/* Windsock marking Novo airfield 5.5 km out */}
       <group position={[60, 0, -60]}>
@@ -427,6 +617,8 @@ export function MaitriScene({ readings, onSelect, activeHotspot }: TwinSceneProp
       <Hotspot position={[16, 7, -26]} label="generators" onSelect={onSelect} active={activeHotspot === "generators"} />
       <Hotspot position={[-8, 19, -30]} label="weather" onSelect={onSelect} active={activeHotspot === "weather"} />
       <Hotspot position={[-44, 7, -12]} label="summer-camp" onSelect={onSelect} active={activeHotspot === "summer-camp"} />
+      <Hotspot position={[62, 7, 18]} label="vehicle-fleet" onSelect={onSelect} active={activeHotspot === "vehicle-fleet"} />
+      <Hotspot position={[74, 8, -30]} label="helipad" onSelect={onSelect} active={activeHotspot === "helipad"} />
 
       {/* Live telemetry readout strip above the main station */}
       <group position={[0, 15.5, 0]}>
@@ -447,6 +639,8 @@ export function MaitriScene({ readings, onSelect, activeHotspot }: TwinSceneProp
           </div>
         </Html>
       </group>
+
+      <ViewModeEffect mode={viewMode} />
     </group>
   );
 }

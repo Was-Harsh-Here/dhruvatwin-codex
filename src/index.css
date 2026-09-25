@@ -189,3 +189,34 @@
     opacity: 0.12;
   }
 }
+
+/* Antarctic Mode: SOS glow and critical flash.
+   Antarctic Mode is a separate high-contrast interface, not a theme. */
+@keyframes antarctic-sos-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(255 0 0 / 0.85);
+  }
+  50% {
+    box-shadow: 0 0 0 36px rgb(255 0 0 / 0);
+  }
+}
+
+@keyframes antarctic-flash {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@layer utilities {
+  .antarctic-sos {
+    animation: antarctic-sos-pulse 1.6s ease-in-out infinite;
+  }
+  .antarctic-flash {
+    animation: antarctic-flash 1.1s steps(2, end) infinite;
+  }
+}

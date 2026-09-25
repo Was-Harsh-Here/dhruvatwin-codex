@@ -32,6 +32,7 @@ export default function Alerts() {
 
   const [tab, setTab] = useState<SeverityTab>("all");
   const [view, setView] = useState<"open" | "resolved">("open");
+  const [subsystemFilter, setSubsystemFilter] = useState<string | null>(null);
 
   const base = view === "open" ? openAlerts : resolvedAlerts;
 
@@ -49,8 +50,37 @@ export default function Alerts() {
     let list = base ?? [];
     if (tab !== "all") list = list.filter((a) => a.severity === tab);
     list = list.filter((a) => a.stationSlug === slug);
+    if (subsystemFilter) list = list.filter((a) => a.subsystem === subsystemFilter);
     return list;
-  }, [base, tab, slug]);
+  }, [base, subsystemFilter, tab, slug]);
+
+  /**
+   * Incident matrix: open incidents broken out by subsystem against severity
+   * so a duty operator can see at a glance where the station is degrading.
+   */
+  const matrix = useMemo(() => {
+    const subsystems = ["power", "thermal", "life_support", "environment", "comms", "safety"];
+    const severities: Array<"critical" | "warning" | "watch"> = ["critical", "warning", "watch"];
+    const rows = subsystems.map((subsystem) => ({
+      subsystem,
+      cells: severities.map((severity) => ({
+        severity,
+        count: (openAlerts ?? []).filter(
+          (a) => a.stationSlug === slug && a.subsystem === subsystem && a.severity === severity,
+        ).length,
+      })),
+    }));
+    const totals = severities.map((severity) => ({
+      severity,
+      count: (openAlerts ?? []).filter(
+        (a) => a.stationSlug === slug && a.severity === severity,
+      ).length,
+    }));
+    return { rows, severities, totals };
+  }, [openAlerts, slug]);
+
+  const incidentId = (alert: { stationSlug: string; equipmentId: string; sensorId?: string }) =>
+    `INC-${alert.stationSlug.slice(0, 3).toUpperCase()}-${alert.equipmentId}-${(alert.sensorId ?? "gen").split(".").pop()?.toUpperCase()}`;
 
   return (
     <AppShell>
@@ -113,6 +143,97 @@ export default function Alerts() {
         </div>
 
         <Card className="cc-panel border-border shadow-none">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="font-display text-sm font-bold uppercase tracking-wider">
+              Incident Matrix
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {subsystemFilter && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-[11px] text-muted-foreground"
+                  onClick={() => setSubsystemFilter(null)}
+                >
+                  Clear subsystem filter
+                </Button>
+              )}
+              <span className="cc-mono text-[11px] text-muted-foreground">
+                subnet view - {slug}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border text-muted-foreground">
+                    <th className="cc-label px-3 py-2">Subsystem</th>
+                    {matrix.severities.map((severity) => (
+                      <th key={severity} className="cc-label px-3 py-2">
+                        {severity}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrix.rows.map((row) => (
+                    <tr key={row.subsystem} className="border-b border-border/60">
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSubsystemFilter((current) =>
+                              current === row.subsystem ? null : row.subsystem,
+                            )
+                          }
+                          className={cn(
+                            "text-xs transition-colors hover:text-primary",
+                            subsystemFilter === row.subsystem
+                              ? "text-primary"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          {SUBSYSTEM_LABELS[row.subsystem] ?? row.subsystem}
+                        </button>
+                      </td>
+                      {row.cells.map((cell) => {
+                        const cls = severityClasses(cell.severity);
+                        return (
+                          <td key={cell.severity} className="px-3 py-2">
+                            <span
+                              className={cn(
+                                "cc-mono inline-flex size-7 items-center justify-center rounded border text-[11px]",
+                                cell.count > 0
+                                  ? cn(cls.border, cls.bg, cls.text)
+                                  : "border-border text-muted-foreground",
+                              )}
+                            >
+                              {cell.count}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                  <tr>
+                    <td className="cc-label px-3 py-2">Total</td>
+                    {matrix.totals.map((total) => {
+                      const cls = severityClasses(total.severity);
+                      return (
+                        <td key={total.severity} className={cn("cc-mono px-3 py-2 text-sm", cls.text)}>
+                          {total.count}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cc-panel border-border shadow-none">
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="font-display text-sm font-bold uppercase tracking-wider">
               {view === "open" ? "Open Incidents" : "Resolved Incidents"}
@@ -147,6 +268,9 @@ export default function Alerts() {
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={cn("cc-label", sev.text)}>{a.severity}</span>
+                        <span className="cc-mono text-[10px] text-muted-foreground">
+                          {incidentId(a)}
+                        </span>
                         <span className="cc-mono text-[10px] text-muted-foreground">{a.stationName}</span>
                         <Badge variant="outline" className="text-[10px] uppercase">
                           {SUBSYSTEM_LABELS[a.subsystem] ?? a.subsystem}

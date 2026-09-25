@@ -1,5 +1,7 @@
 import { ContactShadows, Html, OrbitControls } from "@react-three/drei";
 
+import type { SensorSummary } from "./types";
+
 export type { SensorSummary, TwinHotspotDef, TwinSceneProps } from "./types";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useMemo, useRef, useState } from "react";
@@ -262,15 +264,27 @@ export function Hotspot({
 /* Lights                                                              */
 /* ------------------------------------------------------------------ */
 
-/** Lighting rig per the twin spec: cool sun, hemi fill, warm windows. */
-export function Lighting() {
+/**
+ * Lighting rig per the twin spec: cool sun, hemi fill, warm windows.
+ * Intensities are driven by the active view mode so night and thermal modes
+ * read correctly.
+ */
+export function Lighting({
+  sun = 1.2,
+  hemi = 0.4,
+  ambient = 0.15,
+}: {
+  sun?: number;
+  hemi?: number;
+  ambient?: number;
+}) {
   return (
     <>
-      <directionalLight position={[120, 140, 60]} intensity={1.2} color="#E8F4FF" />
-      <hemisphereLight args={["#1A2A44", "#4A3E30", 0.4]} />
+      <directionalLight position={[120, 140, 60]} intensity={sun} color="#E8F4FF" />
+      <hemisphereLight args={["#1A2A44", "#4A3E30", hemi]} />
       <pointLight position={[0, 12, 0]} intensity={40} distance={40} color="#FFB366" />
       <pointLight position={[-60, 8, 40]} intensity={25} distance={50} color={TWIN_COLORS.cyan} />
-      <ambientLight intensity={0.15} />
+      <ambientLight intensity={ambient} />
     </>
   );
 }
@@ -344,6 +358,54 @@ export function TwinCanvas({
       <color attach="background" args={[fogColor]} />
       {children}
     </Canvas>
+  );
+}
+
+/**
+ * Thermal-mode readout labels pinned to subsystems. Each label shows the live
+ * value and parameter for one equipment tag so the thermal view carries
+ * numbers rather than only a colour gradient.
+ */
+export function ThermalReadout({
+  targets,
+  readings,
+}: {
+  targets: Array<{ tag: string; position: [number, number, number] }>;
+  readings: SensorSummary[];
+}) {
+  return (
+    <group>
+      {targets.map((target) => {
+        const reading = readings.find((r) => r.equipmentId === target.tag);
+        if (!reading) return null;
+        const color =
+          reading.status === "critical"
+            ? "#FF3B47"
+            : reading.status === "warning"
+              ? "#FFB020"
+              : "#FF8A1F";
+        return (
+          <Html
+            key={target.tag}
+            position={target.position}
+            center
+            distanceFactor={155}
+          >
+            <div
+              className="pointer-events-none whitespace-nowrap rounded border px-2 py-1 text-center font-mono text-[10px] leading-tight backdrop-blur"
+              style={{ color, borderColor: `${color}80`, background: "#060B14E6" }}
+            >
+              <div className="font-bold">{target.tag}</div>
+              <div>
+                {reading.value.toFixed(reading.decimals)}
+                {reading.unit}
+              </div>
+              <div style={{ color: "#6B7A8F" }}>{reading.parameter}</div>
+            </div>
+          </Html>
+        );
+      })}
+    </group>
   );
 }
 

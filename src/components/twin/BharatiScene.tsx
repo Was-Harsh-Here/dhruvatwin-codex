@@ -11,9 +11,13 @@ import {
   Snowfall,
   Stars,
   Terrain,
+  ThermalReadout,
   TWIN_COLORS,
   type TwinSceneProps,
 } from "./twin-primitives";
+import { VehicleFleet } from "./VehicleFleet";
+import { BHARATI_MEP, MepOverlay } from "./MepOverlay";
+import { ViewModeEffect, modeLighting } from "./view-modes";
 
 /* ------------------------------------------------------------------ */
 /* Reusable building blocks                                            */
@@ -30,7 +34,10 @@ function ContainerStation({ onInfo }: { onInfo: () => void }) {
     [],
   );
   return (
-    <group onClick={(e) => { e.stopPropagation(); onInfo(); }}>
+    <group
+      userData={{ structural: true }}
+      onClick={(e) => { e.stopPropagation(); onInfo(); }}
+    >
       {/* 8 container rows x 5 containers, two levels */}
       {rows.map((row, ri) =>
         Array.from({ length: row.count }, (_, ci) => {
@@ -382,6 +389,133 @@ function NeighbourMarker({
   );
 }
 
+/** Cargo and cold-store containers stacked behind the main building. */
+function CargoYard() {
+  return (
+    <group position={[-24, 0, -78]} rotation={[0, 0.1, 0]}>
+      {Array.from({ length: 10 }, (_, i) => (
+        <group key={i} position={[(i % 5) * 6.6, 0, Math.floor(i / 5) * 3.6]}>
+          <mesh position={[0, 1.4, 0]}>
+            <boxGeometry args={[6, 2.8, 2.9]} />
+            <meshStandardMaterial
+              color={i % 3 === 0 ? TWIN_COLORS.moduleRed : i % 3 === 1 ? "#26506E" : TWIN_COLORS.moduleWhite}
+              {...MAT.metal}
+            />
+          </mesh>
+          <mesh position={[0, 2.85, 0]}>
+            <boxGeometry args={[6.1, 0.2, 3]} />
+            <meshStandardMaterial color={TWIN_COLORS.pole} {...MAT.metal} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** Helipad apron with approach markings and perimeter lights. */
+function Helipad() {
+  return (
+    <group position={[-74, 0, -34]}>
+      <mesh position={[0, 0.16, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[7.5, 28]} />
+        <meshStandardMaterial color="#2A333C" {...MAT.snow} />
+      </mesh>
+      <mesh position={[0, 0.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[6.6, 7.2, 32]} />
+        <meshStandardMaterial color="#E8EEF4" side={THREE.DoubleSide} />
+      </mesh>
+      {[0, 0.35, 1].map((a, i) => (
+        <mesh
+          key={i}
+          position={[Math.cos(a * 6.28) * 1.3, 0.21, Math.sin(a * 6.28) * 1.1]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[0.7, 4.4]} />
+          <meshStandardMaterial color="#E8EEF4" side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+      {Array.from({ length: 8 }, (_, i) => {
+        const angle = (i / 8) * Math.PI * 2;
+        return (
+          <mesh key={`l${i}`} position={[Math.cos(angle) * 7.8, 0.3, Math.sin(angle) * 7.8]}>
+            <sphereGeometry args={[0.2, 8, 8]} />
+            <meshStandardMaterial color={TWIN_COLORS.amber} emissive={TWIN_COLORS.amber} emissiveIntensity={1.6} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+/** Ice runway marker used by the summer air link. */
+function IceRunway() {
+  return (
+    <group position={[120, 0, -140]} rotation={[0, -0.18, 0]}>
+      <mesh position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[26, 220]} />
+        <meshStandardMaterial color="#D3E0E8" {...MAT.snow} />
+      </mesh>
+      {Array.from({ length: 10 }, (_, i) => (
+        <mesh key={i} position={[i % 2 === 0 ? -12 : 12, 0.4, -100 + i * 22]}>
+          <boxGeometry args={[0.4, 0.7, 0.4]} />
+          <meshStandardMaterial color={TWIN_COLORS.amber} emissive={TWIN_COLORS.amber} emissiveIntensity={0.9} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.16, 40]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[2, 26]} />
+        <meshStandardMaterial color="#8A949E" side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Wind-carved sastrugi ridges across the Larsemann apron. */
+function Sastrugi() {
+  const ridges = useMemo(
+    () =>
+      Array.from({ length: 18 }, (_, i) => ({
+        x: -160 + ((i * 59) % 360),
+        z: 60 + ((i * 43) % 220),
+        rot: (i * 0.41) % Math.PI,
+        len: 9 + ((i * 7) % 18),
+        h: 0.45 + ((i * 5) % 7) * 0.15,
+      })),
+    [],
+  );
+  return (
+    <group>
+      {ridges.map((r, i) => (
+        <mesh key={i} position={[r.x, r.h / 2, r.z]} rotation={[0, r.rot, 0]}>
+          <boxGeometry args={[r.len, r.h, 1.6]} />
+          <meshStandardMaterial color="#E6EFF5" {...MAT.snow} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** Fjord-side jetty used by the Zodiac and resupply lighters. */
+function Jetty() {
+  return (
+    <group position={[52, 0, 96]} rotation={[0, 0.4, 0]}>
+      <mesh position={[0, 0.7, 0]}>
+        <boxGeometry args={[4, 0.4, 26]} />
+        <meshStandardMaterial color="#6B4E2E" {...MAT.metal} />
+      </mesh>
+      {Array.from({ length: 6 }, (_, i) => (
+        <mesh key={i} position={[i % 2 === 0 ? -1.6 : 1.6, 0.2, -12 + i * 4.8]}>
+          <cylinderGeometry args={[0.28, 0.28, 1.4, 8]} />
+          <meshStandardMaterial color={TWIN_COLORS.pole} {...MAT.metal} />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.5, 12]}>
+        <cylinderGeometry args={[0.2, 0.2, 2, 8]} />
+        <meshStandardMaterial color={TWIN_COLORS.amber} emissive={TWIN_COLORS.amber} emissiveIntensity={0.7} />
+      </mesh>
+    </group>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* The assembled Bharati scene                                         */
 /* ------------------------------------------------------------------ */
@@ -392,24 +526,40 @@ function NeighbourMarker({
  * plant, laboratory, summer camp, Thala Fjord, Quilty Bay, scattered lakes,
  * Larsemann Hills and neighbour-station markers.
  */
-export function BharatiScene({ readings, onSelect, activeHotspot }: TwinSceneProps) {
+/** Thermal readout targets for Bharati. */
+const BHARATI_THERMAL: Array<{ tag: string; position: [number, number, number] }> = [
+  { tag: "HAB-BHARATI", position: [0, 16, 0] },
+  { tag: "CHP-1", position: [34, 9, -20] },
+  { tag: "FUEL-BHARATI", position: [-44, 14, -12] },
+  { tag: "SWPUMP-BHARATI", position: [10, 10, 44] },
+  { tag: "AWS-BHARATI", position: [-8, 20, -60] },
+  { tag: "VSAT-BHARATI", position: [30, 16, 8] },
+];
+
+export function BharatiScene({
+  readings,
+  onSelect,
+  activeHotspot,
+  viewMode = "exterior",
+}: TwinSceneProps) {
   const find = (tag: string) => readings.find((r) => r.equipmentId === tag);
 
   return (
     <group>
       <Terrain
-        size={620}
+        size={900}
         color="#C7D3DA"
         rises={[
-          { x: -190, z: -220, r: 210, h: 9 },
-          { x: 210, z: -170, r: 160, h: 6 },
-          { x: 40, z: -260, r: 130, h: 7 },
+          { x: -240, z: -280, r: 260, h: 11 },
+          { x: 260, z: -210, r: 200, h: 7 },
+          { x: 40, z: -320, r: 170, h: 8 },
+          { x: 320, z: 180, r: 150, h: 5 },
         ]}
       />
-      <Lighting />
-      <Stars count={800} />
-      <Aurora z={-190} scale={1.25} />
-      <Snowfall count={1200} spread={280} />
+      <Lighting {...modeLighting(viewMode)} />
+      <Stars count={1200} />
+      <Aurora z={-240} scale={1.25} />
+      <Snowfall count={6000} spread={360} />
       <GroundShadow />
 
       <ContainerStation onInfo={() => onSelect("main-station")} />
@@ -421,6 +571,17 @@ export function BharatiScene({ readings, onSelect, activeHotspot }: TwinScenePro
       <SummerCamp15 />
       <WaterFeatures />
       <LarsemannHills />
+      <CargoYard />
+      <Helipad />
+      <IceRunway />
+      <Sastrugi />
+      <Jetty />
+      <VehicleFleet station="bharati" />
+
+      {viewMode === "mep" && <MepOverlay {...BHARATI_MEP} />}
+      {viewMode === "thermal" && (
+        <ThermalReadout targets={BHARATI_THERMAL} readings={readings} />
+      )}
 
       {/* Neighbour stations */}
       <NeighbourMarker position={[150, 0, -40]} name="PROGRESS 8 KM" />
@@ -436,6 +597,8 @@ export function BharatiScene({ readings, onSelect, activeHotspot }: TwinScenePro
       <Hotspot position={[-12, 7, -52]} label="summer-camp" onSelect={onSelect} active={activeHotspot === "summer-camp"} />
       <Hotspot position={[-70, 6, 110]} label="fjord" onSelect={onSelect} active={activeHotspot === "fjord"} />
       <Hotspot position={[120, 6, 90]} label="bay" onSelect={onSelect} active={activeHotspot === "bay"} />
+      <Hotspot position={[-80, 8, 16]} label="vehicle-fleet" onSelect={onSelect} active={activeHotspot === "vehicle-fleet"} />
+      <Hotspot position={[-74, 8, -34]} label="helipad" onSelect={onSelect} active={activeHotspot === "helipad"} />
 
       {/* Live telemetry readout strip above the station */}
       <group position={[0, 16.5, 10]}>
@@ -456,6 +619,8 @@ export function BharatiScene({ readings, onSelect, activeHotspot }: TwinScenePro
           </div>
         </Html>
       </group>
+
+      <ViewModeEffect mode={viewMode} />
     </group>
   );
 }

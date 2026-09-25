@@ -138,6 +138,7 @@ const schema = defineSchema(
 
     alerts: defineTable({
       stationId: v.id("stations"),
+      incidentId: v.optional(v.string()),
       subsystem: v.string(),
       equipmentId: v.string(),
       sensorId: v.optional(v.string()),
@@ -154,6 +155,138 @@ const schema = defineSchema(
     })
       .index("by_station_created", ["stationId", "createdAt"])
       .index("by_open", ["resolved", "createdAt"]),
+
+    /**
+     * Station personnel roster. Each member carries an RFID badge, a UHF
+     * radio channel, a medical clearance state and a duty shift.
+     */
+    personnel: defineTable({
+      stationId: v.id("stations"),
+      badgeId: v.string(),
+      name: v.string(),
+      role: v.string(),
+      sector: v.string(),
+      rfidStatus: v.union(
+        v.literal("valid"),
+        v.literal("expired"),
+        v.literal("unassigned"),
+      ),
+      uhfChannel: v.string(),
+      medStatus: v.union(
+        v.literal("fit"),
+        v.literal("monitor"),
+        v.literal("restricted"),
+      ),
+      dutyShift: v.string(),
+      present: v.boolean(),
+      lastSync: v.number(),
+    })
+      .index("by_station", ["stationId"])
+      .index("by_badge", ["badgeId"]),
+
+    /** Per-source microgrid output / thermal recovery / storage state. */
+    microgridReadings: defineTable({
+      stationId: v.id("stations"),
+      source: v.string(),
+      outputKw: v.number(),
+      thermalKw: v.number(),
+      soc: v.number(),
+      loadKw: v.number(),
+      timestamp: v.number(),
+    })
+      .index("by_station_time", ["stationId", "timestamp"])
+      .index("by_station_source", ["stationId", "source", "timestamp"]),
+
+    /** Automatic weather station history for the local environment screens. */
+    weatherReadings: defineTable({
+      stationId: v.id("stations"),
+      temperature: v.number(),
+      windSpeed: v.number(),
+      windDirection: v.number(),
+      pressure: v.number(),
+      timestamp: v.number(),
+    }).index("by_station_time", ["stationId", "timestamp"]),
+
+    /** Scheduled satellite passes with pointing prediction and link budget. */
+    satellitePasses: defineTable({
+      stationId: v.id("stations"),
+      satelliteName: v.string(),
+      azimuth: v.number(),
+      elevation: v.number(),
+      scheduledAt: v.number(),
+      durationSec: v.number(),
+      linkBudget: v.number(),
+    }).index("by_station_time", ["stationId", "scheduledAt"]),
+
+    /** Hash-chained command log backing the audit trail screen. */
+    commandLogs: defineTable({
+      sequence: v.number(),
+      node: v.string(),
+      stationSlug: v.string(),
+      category: v.string(),
+      message: v.string(),
+      timestamp: v.number(),
+      hash: v.string(),
+      prevHash: v.string(),
+    })
+      .index("by_sequence", ["sequence"])
+      .index("by_time", ["timestamp"]),
+
+    /** NCPOR / NPDC reference library. */
+    documents: defineTable({
+      title: v.string(),
+      category: v.string(),
+      url: v.string(),
+      summary: v.string(),
+      npdcStandard: v.optional(v.string()),
+      tags: v.array(v.string()),
+      publishedAt: v.number(),
+    })
+      .index("by_category", ["category"])
+      .index("by_published", ["publishedAt"]),
+
+    /** Indian Scientific Expedition to Antarctica (ISEA) log. */
+    expeditions: defineTable({
+      number: v.number(),
+      year: v.string(),
+      teamSize: v.number(),
+      focus: v.string(),
+      summary: v.string(),
+      stationSlug: v.string(),
+      leaderRole: v.string(),
+    }).index("by_number", ["number"]),
+
+    /**
+     * Satellite blackout events. The AI continuity engine records the
+     * prediction that preceded the drop and, after recovery, the measured
+     * coverage so the two can be reconciled.
+     */
+    blackoutEvents: defineTable({
+      stationId: v.id("stations"),
+      startedAt: v.number(),
+      endedAt: v.optional(v.number()),
+      predictedAt: v.number(),
+      confidence: v.number(),
+      status: v.union(v.literal("active"), v.literal("reconciled")),
+      trigger: v.string(),
+      predictedCoverage: v.number(),
+      actualCoverage: v.optional(v.number()),
+      reconciliationNote: v.optional(v.string()),
+      model: v.string(),
+      accuracyTarget: v.number(),
+    })
+      .index("by_station_time", ["stationId", "startedAt"])
+      .index("by_status", ["status"]),
+
+    /** Audit record of every NPDC metadata export generated on the platform. */
+    npdcExports: defineTable({
+      stationSlug: v.string(),
+      datasetId: v.string(),
+      standard: v.string(),
+      recordCount: v.number(),
+      generatedAt: v.number(),
+      generatedBy: v.optional(v.string()),
+    }).index("by_station_time", ["stationSlug", "generatedAt"]),
   },
   {
     schemaValidation: false,

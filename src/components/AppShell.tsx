@@ -1,29 +1,91 @@
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/use-auth";
+import { useBlackout } from "@/hooks/use-blackout";
+import { useRoleView } from "@/hooks/use-role-view";
+import { useStationLinkContext } from "@/components/StationLinkProvider";
+import { StationLinkProvider } from "@/components/StationLinkProvider";
+import { AssistantDock } from "@/components/AssistantDock";
 import {
   PROJECT_IDENTITY,
   INSTRUMENTED_STATIONS,
-  type StationSlug,
   formatUtc,
+  stationFromParams,
+  type StationSlug,
 } from "@/lib/station";
+import { ROLE_VIEWS } from "@/lib/roles";
 import {
   Activity,
   AlertTriangle,
   Box,
+  BookOpen,
+  ClipboardList,
+  Cpu,
+  FileCheck2,
+  Globe2,
   Layers,
+  LogOut,
+  Map,
+  Menu,
   PenSquare,
   Radio,
   Shield,
   Snowflake,
-  LogOut,
-  Menu,
+  Users,
+  Wind,
   X,
+  Zap,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
-import { Link, NavLink, useSearchParams } from "react-router";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+/** Nav sections grouped by the way operators actually use the console. */
+const NAV_SECTIONS: Array<{
+  title: string;
+  items: Array<{ to: string; label: string; icon: typeof Activity }>;
+}> = [
+  {
+    title: "Operations",
+    items: [
+      { to: "/dashboard", label: "Sensor Dashboard", icon: Activity },
+      { to: "/alerts", label: "Alert Triage", icon: AlertTriangle },
+      { to: "/station", label: "Station Dashboard", icon: Users },
+      { to: "/microgrid", label: "Microgrid & CHP", icon: Zap },
+      { to: "/environment", label: "Local Environment", icon: Map },
+    ],
+  },
+  {
+    title: "Twin & Field",
+    items: [
+      { to: "/twin", label: "Digital Twin 3D", icon: Box },
+      { to: "/antarctica", label: "Antarctica Overview", icon: Globe2 },
+      { to: "/weather", label: "Weather Extension", icon: Wind },
+      { to: "/antarctic", label: "Antarctic Mode", icon: Snowflake },
+    ],
+  },
+  {
+    title: "Records",
+    items: [
+      { to: "/library", label: "NCPOR Library", icon: BookOpen },
+      { to: "/compliance", label: "NPDC Compliance", icon: FileCheck2 },
+      { to: "/expeditions", label: "Expedition Logs", icon: ClipboardList },
+      { to: "/audit", label: "Audit Trail", icon: Shield },
+    ],
+  },
+  {
+    title: "Workspace",
+    items: [
+      { to: "/catalog", label: "Equipment Catalog", icon: Layers },
+      { to: "/workspace", label: "Workspace", icon: PenSquare },
+      { to: "/admin", label: "Admin Console", icon: Shield },
+    ],
+  },
+];
 
 /** UTC clock display for the top bar. */
 function UtcClock() {
@@ -33,38 +95,132 @@ function UtcClock() {
     return () => window.clearInterval(t);
   }, []);
   return (
-    <span className="cc-mono hidden text-xs text-muted-foreground md:inline">
+    <span className="cc-mono hidden text-xs text-muted-foreground xl:inline">
       {formatUtc(now)}
     </span>
   );
 }
 
-/** Top-level authenticated layout for the DhruvaTwin command centre. */
-export function AppShell({ children }: { children: ReactNode }) {
-  const { user, signOut } = useAuth();
-  const [params, setParams] = useSearchParams();
-  const station = (params.get("station") === "bharati" ? "bharati" : "maitri") as StationSlug;
-  const [navOpen, setNavOpen] = useState(false);
-
-  const setStation = (slug: StationSlug) => {
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("station", slug);
-        return next;
-      },
-      { replace: true },
+/** Continuity prediction widget shown in the top bar. */
+function ContinuityWidget({ slug }: { slug: string }) {
+  const blackout = useBlackout(slug);
+  if (!blackout.ready) {
+    return (
+      <Badge variant="outline" className="hidden border-border text-[10px] text-muted-foreground lg:inline-flex">
+        <Cpu className="mr-1 size-3" />
+        AI engine loading
+      </Badge>
     );
+  }
+  const critical = blackout.active || blackout.riskLevel === "imminent";
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "hidden text-[10px] lg:inline-flex",
+        critical
+          ? "border-[#FF3B47]/50 text-[#FF3B47]"
+          : blackout.riskLevel === "high"
+            ? "border-[#FFB020]/50 text-[#FFB020]"
+            : "border-[#00E0C6]/40 text-[#00E0C6]",
+      )}
+      title={`Continuity engine ${blackout.model}, target ${blackout.accuracyTarget}% accuracy`}
+    >
+      <Cpu className="mr-1 size-3" />
+      {blackout.active
+        ? `Blackout active - ${blackout.remainingSec}s to restore`
+        : `Drop predicted in ${blackout.minutesToDrop} min - ${blackout.confidence}% confidence`}
+    </Badge>
+  );
+}
+
+/** Offline queue and broker state indicator. */
+function SyncIndicator() {
+  const link = useStationLinkContext();
+  const connected = link.status === "connected";
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "hidden text-[10px] md:inline-flex",
+        connected
+          ? "border-[#3EE07F]/40 text-[#3EE07F]"
+          : link.online
+            ? "border-[#FFB020]/40 text-[#FFB020]"
+            : "border-[#FF3B47]/40 text-[#FF3B47]",
+      )}
+      title={`MQTT broker ${link.broker} - ${link.published} frames published, ${link.pending} queued`}
+    >
+      <Radio className="mr-1 size-3" />
+      {connected ? "ONLINE" : link.online ? "SYNCING" : "OFFLINE"} - {link.pending} queued
+    </Badge>
+  );
+}
+
+/** Authenticated console chrome. */
+function ShellChrome({
+  station,
+  setStation,
+  children,
+}: {
+  station: StationSlug;
+  setStation: (slug: StationSlug) => void;
+  children: ReactNode;
+}) {
+  const { user, signOut } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [navOpen, setNavOpen] = useState(false);
+  const link = useStationLinkContext();
+  const blackout = useBlackout(station);
+  const readings = useStationReadingsForAuto(station);
+
+  const profileRole = (user as { twinRole?: string } | null)?.twinRole ?? null;
+  const { role, def, setRole, allows } = useRoleView(profileRole);
+
+  /* --- Antarctic Mode: manual toggle and keyboard shortcut --- */
+  const toggleAntarctic = () => {
+    if (location.pathname === "/antarctic") {
+      navigate(`/dashboard?station=${station}`);
+    } else {
+      navigate(`/antarctic?station=${station}`);
+    }
   };
 
-  const navItems = [
-    { to: "/dashboard", label: "Sensor Dashboard", icon: Activity, end: true },
-    { to: "/alerts", label: "Alert Triage", icon: AlertTriangle },
-    { to: "/twin", label: "Digital Twin 3D", icon: Box },
-    { to: "/catalog", label: "Equipment Catalog", icon: Layers },
-    { to: "/workspace", label: "Workspace", icon: PenSquare },
-    { to: "/admin", label: "Admin Console", icon: Shield },
-  ];
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        toggleAntarctic();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  /*
+   * Antarctic Mode automatic activation.
+   *
+   * Fires once per browser session when the station environment crosses a
+   * threshold, so a crew member who is already working in the console is not
+   * pulled out of it repeatedly by the same weather.
+   */
+  const autoFired = useRef(false);
+  useEffect(() => {
+    if (autoFired.current) return;
+    if (location.pathname === "/antarctic") return;
+    if (!readings) return;
+    if (sessionStorage.getItem(AUTO_KEY)) {
+      autoFired.current = true;
+      return;
+    }
+    const reason = antarcticTrigger(readings);
+    if (!reason) return;
+    autoFired.current = true;
+    sessionStorage.setItem(AUTO_KEY, reason);
+    toast.warning(`Antarctic Mode auto-activated: ${reason}.`);
+    navigate(`/antarctic?station=${station}&reason=${encodeURIComponent(reason)}`);
+  }, [location.pathname, navigate, readings, station]);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -75,39 +231,86 @@ export function AppShell({ children }: { children: ReactNode }) {
           navOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex items-center gap-3 px-5 py-5">
+        <div className="flex items-center gap-3 px-5 py-4">
           <div className="flex size-10 items-center justify-center rounded-md border border-primary/40 bg-primary/10">
             <Snowflake className="size-5 text-primary" />
           </div>
           <div className="leading-tight">
             <div className="font-display text-sm font-bold tracking-wide text-foreground">
-              {PROJECT_IDENTITY.name} Platform
+              {PROJECT_IDENTITY.name}
             </div>
             <div className="cc-label">Team {PROJECT_IDENTITY.team}</div>
           </div>
         </div>
         <Separator />
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          <div className="cc-label px-2 pb-2">Operations</div>
-          {navItems.map(({ to, label, icon: Icon, ...rest }) => (
-            <NavLink
-              key={to}
-              to={to}
-              onClick={() => setNavOpen(false)}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )
-              }
-            >
-              <Icon className="size-4 shrink-0" />
-              <span className="truncate">{label}</span>
-            </NavLink>
-          ))}
+        <div className="px-5 py-3">
+          <div className="cc-label pb-1">Role view</div>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as typeof role)}
+            className="h-8 w-full rounded border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-primary/50"
+          >
+            {ROLE_VIEWS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">{def.focus}</p>
+        </div>
+        <Separator />
+        <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
+          {NAV_SECTIONS.map((section) => {
+            const items = section.items.filter((item) => allows(item.to));
+            if (items.length === 0) return null;
+            return (
+              <div key={section.title} className="space-y-1">
+                <div className="cc-label px-2 pb-1">{section.title}</div>
+                {items.map(({ to, label, icon: Icon }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    onClick={() => setNavOpen(false)}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )
+                    }
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
         </nav>
+        <Separator />
+        {/* Continuity drill trigger, kept in the left rail so it is reachable
+            from every screen while the operator is watching a station. */}
+        <div className="space-y-2 px-4 py-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full border-[#FF3B47]/60 text-[10px] uppercase tracking-wider text-[#FF3B47] hover:bg-[#FF3B47]/10"
+            disabled={blackout.active || blackout.busy}
+            onClick={() => void blackout.start()}
+            title="Run the 60 second satellite blackout drill for this station"
+          >
+            <Cpu className="mr-1.5 size-3" />
+            {blackout.active
+              ? `Blackout active ${blackout.remainingSec}s`
+              : "Simulate Satellite Blackout"}
+          </Button>
+          <p className="cc-mono text-[10px] leading-relaxed text-muted-foreground">
+            {blackout.active
+              ? `Predicted retention ${blackout.confidence}% - target ${blackout.accuracyTarget}% accuracy`
+              : `Drop in ${blackout.minutesToDrop} min at ${blackout.confidence}% confidence`}
+          </p>
+        </div>
         <Separator />
         <div className="px-5 py-4">
           <div className="cc-label">PS {PROJECT_IDENTITY.psId} - SIH 2026</div>
@@ -155,19 +358,30 @@ export function AppShell({ children }: { children: ReactNode }) {
               </button>
             ))}
           </div>
-          <div className="ml-auto flex items-center gap-4">
+          <div className="ml-auto flex items-center gap-3">
+            <ContinuityWidget slug={station} />
+            <SyncIndicator />
             <UtcClock />
-            <Badge variant="outline" className="hidden border-primary/40 text-primary sm:inline-flex">
-              <Radio className="mr-1 size-3" />
-              SIM LINK
-            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-8 gap-1.5 text-[10px] uppercase tracking-wider",
+                location.pathname === "/antarctic" && "border-[#FFD700] text-[#FFD700]",
+              )}
+              onClick={toggleAntarctic}
+              title="Antarctic Mode (Ctrl+Shift+A)"
+            >
+              <Snowflake className="size-3.5" />
+              Antarctic
+            </Button>
             <div className="flex items-center gap-2">
               <div className="hidden text-right sm:block">
                 <div className="text-xs font-medium text-foreground">
                   {user?.name ?? user?.email ?? "Operator"}
                 </div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {(user as { twinRole?: string } | null)?.twinRole ?? "Scientist"}
+                  {role}
                 </div>
               </div>
               <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void signOut()}>
@@ -189,12 +403,76 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span>PS {PROJECT_IDENTITY.psId}</span>
             <span>{PROJECT_IDENTITY.event}</span>
             <span className="hidden sm:inline">{PROJECT_IDENTITY.agency}</span>
+            <span className="cc-mono">
+              AI engine {blackout.model} - {blackout.ready ? `${blackout.riskLevel} risk` : "starting"} -
+              target {blackout.accuracyTarget}% accuracy
+            </span>
+            <span className="cc-mono">
+              MQTT {link.broker} {link.status} - {link.pending} queued
+            </span>
             <Link to="/" className="ml-auto hover:text-foreground">
               About the project
             </Link>
           </div>
         </footer>
       </div>
+
+      <AssistantDock
+        slug={station}
+        stationLabel={station === "maitri" ? "Maitri" : "Bharati"}
+      />
     </div>
+  );
+}
+
+/** Live telemetry used by the Antarctic Mode auto-activation rule. */
+function useStationReadingsForAuto(slug: string) {
+  return useQuery(api.telemetry.getLiveReadings, { slug });
+}
+
+/** Session key that records an automatic Antarctic Mode activation. */
+const AUTO_KEY = "dhruvatwin.antarcticAuto";
+
+/**
+ * Antarctic Mode auto-activation rule: ambient at or below -20 Celsius, or
+ * surface wind above 80 km/h (the katabatic blackout band).
+ */
+function antarcticTrigger(
+  readings: Array<{ sensorId: string; value: number; unit: string }> | undefined,
+): string | null {
+  if (!readings) return null;
+  const ambient = readings.find((r) => r.sensorId === "env.temperature");
+  const wind = readings.find((r) => r.sensorId === "env.wind_speed");
+  if (ambient && ambient.value <= -20) {
+    return `ambient temperature ${ambient.value.toFixed(1)} C is at or below the -20 C Antarctic Mode threshold`;
+  }
+  if (wind && wind.value * 3.6 > 80) {
+    return `surface wind ${(wind.value * 3.6).toFixed(0)} km/h is above the 80 km/h katabatic threshold`;
+  }
+  return null;
+}
+
+/** Top-level authenticated layout for the DhruvaTwin command centre. */
+export function AppShell({ children }: { children: ReactNode }) {
+  const [params, setParams] = useSearchParams();
+  const station = stationFromParams(params);
+
+  const setStation = (slug: StationSlug) => {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("station", slug);
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  return (
+    <StationLinkProvider slug={station}>
+      <ShellChrome station={station} setStation={setStation}>
+        {children}
+      </ShellChrome>
+    </StationLinkProvider>
   );
 }
