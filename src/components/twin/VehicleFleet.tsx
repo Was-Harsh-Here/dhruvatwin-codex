@@ -784,3 +784,22 @@ export function VehicleFleet({
 export function fleetCount(station: "maitri" | "bharati"): number {
   return (FLEET[station] ?? []).reduce((sum, entry) => sum + entry.count, 0);
 }
+
+/**
+ * World position of one parked unit, read back from the same yard layout the
+ * models are placed from, so the console can fly the camera to a unit that was
+ * picked from a list rather than from the scene.
+ */
+export function vehiclePosition(
+  station: "maitri" | "bharati",
+  instanceId: string,
+): [number, number] | null {
+  for (const entry of FLEET[station] ?? []) {
+    for (let i = 0; i < entry.count; i += 1) {
+      if (`${station}-${entry.id}-${i + 1}` === instanceId) {
+        return [entry.x + i * entry.dx, entry.z + (i % 2 === 0 ? 0 : entry.dz)];
+      }
+    }
+  }
+  return null;
+}

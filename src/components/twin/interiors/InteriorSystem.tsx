@@ -1,6 +1,6 @@
 import { OrbitControls } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { Corridor, DoorLeaf, INT, RoomShell } from "./kit";
 import type { OnInspect } from "./kit";
@@ -32,6 +32,9 @@ export interface InteriorSystemProps {
   onPosition: (x: number, z: number, yaw: number) => void;
   onLockChange: (locked: boolean) => void;
   onExitWalk: () => void;
+  /** Room ids whose light switch is currently thrown, keyed room id. */
+  lightsOut: Record<string, boolean>;
+  onToggleLights: (roomId: string) => void;
 }
 
 export function InteriorSystem({
@@ -45,6 +48,8 @@ export function InteriorSystem({
   onPosition,
   onLockChange,
   onExitWalk,
+  lightsOut,
+  onToggleLights,
 }: InteriorSystemProps) {
   const plan = floorPlan(slug, level);
   const geometry = useMemo(() => floorGeometry(slug, level), [slug, level]);
@@ -52,12 +57,7 @@ export function InteriorSystem({
     () => new THREE.Vector3(0, plan?.y ?? 0, 0),
     [plan?.y],
   );
-  const [dark, setDark] = useState<Record<string, boolean>>({});
   const doorState: DoorStateRef = useRef<Record<string, boolean>>({});
-
-  const toggleLights = useCallback((roomId: string) => {
-    setDark((prev) => ({ ...prev, [roomId]: !prev[roomId] }));
-  }, []);
 
   const onStair = useCallback(
     (dir: 1 | -1) => {
@@ -124,14 +124,14 @@ export function InteriorSystem({
         ))}
 
       {/* Corridor and rooms */}
-      <Corridor plan={plan} lightsOn={!dark.corridor} showCeiling={showCeiling} />
+      <Corridor plan={plan} lightsOn={!lightsOut.corridor} showCeiling={showCeiling} />
       {plan.rooms.map((room) => (
         <RoomShell
           key={room.id}
           room={room}
           plan={plan}
-          lightsOn={!dark[room.id]}
-          onToggleLights={() => toggleLights(room.id)}
+          lightsOn={!lightsOut[room.id]}
+          onToggleLights={() => onToggleLights(room.id)}
           showCeiling={showCeiling}
         >
           <RoomContents room={room} plan={plan} onStair={onStair} />

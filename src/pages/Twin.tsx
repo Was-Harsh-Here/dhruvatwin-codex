@@ -13,7 +13,7 @@ import {
 } from "@/components/twin/twin-primitives";
 import { TwoAndHalfD } from "@/components/twin/TwoAndHalfD";
 import { VIEW_MODES, type ViewMode } from "@/components/twin/view-modes";
-import { FLEET, VEHICLE_CLASSES, fleetCount } from "@/components/twin/VehicleFleet";
+import { FLEET, VEHICLE_CLASSES, fleetCount, vehiclePosition } from "@/components/twin/VehicleFleet";
 import { vehicleInstances, vehicleById } from "@/components/twin/vehicle-data";
 import { UnderwaterView } from "@/components/twin/water/UnderwaterView";
 import { WATER_BODIES, stationWater } from "@/components/twin/water/water-data";
@@ -185,6 +185,12 @@ class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean
 
 type ViewKind = "exterior" | "interior" | "isometric";
 
+/** Injected camera preset used when a body with no preset of its own is picked. */
+const WATER_FOCUS = "water-focus";
+
+/** Injected camera preset used when a parked unit is picked from a list. */
+const VEHICLE_FOCUS = "vehicle-focus";
+
 /** Digital Twin view: exterior world, walkable interior and isometric cutaway. */
 export default function Twin() {
   const [params, setParams] = useSearchParams();
@@ -199,6 +205,7 @@ export default function Twin() {
   const [locked, setLocked] = useState(false);
   const [position, setPosition] = useState({ x: 0, z: 0, yaw: 0 });
   const [roomId, setRoomId] = useState<string | null>(null);
+  const [lightsOut, setLightsOut] = useState<Record<string, boolean>>({});
   const [inspect, setInspect] = useState<InspectTarget | null>(null);
   const [activeVehicle, setActiveVehicle] = useState<string | null>(null);
   const [runningVehicles, setRunningVehicles] = useState<string[]>([]);
@@ -346,6 +353,7 @@ export default function Twin() {
         setView("exterior");
         setActiveVehicle(target.vehicleId);
         setInspect(null);
+        setPreset(VEHICLE_FOCUS);
       }
     },
     [setParams, slug],
@@ -427,6 +435,42 @@ export default function Twin() {
     );
   }, []);
 
+  /**
+   * The Larsemann lakelets and the parked units have no entry in the fixed
+   * preset list, so picking one appends a focus preset aimed at its own world
+   * coordinates. Everything else flies along the standard list.
+   */
+  const cameraPresets = useMemo<CameraPreset[]>(() => {
+    if (preset === WATER_FOCUS && water) {
+      const [x, z] = water.position;
+      return [
+        ...PRESETS,
+        {
+          id: WATER_FOCUS,
+          label: water.name,
+          position: [x + 26, 24, z + 26],
+          target: [x, 0, z],
+        },
+      ];
+    }
+    if (preset === VEHICLE_FOCUS && activeVehicle) {
+      const station = activeVehicle.startsWith("maitri") ? "maitri" : "bharati";
+      const at = vehiclePosition(station, activeVehicle);
+      if (at) {
+        return [
+          ...PRESETS,
+          {
+            id: VEHICLE_FOCUS,
+            label: "Yard unit",
+            position: [at[0] + 13, 7, at[1] + 13],
+            target: [at[0], 1, at[1]],
+          },
+        ];
+      }
+    }
+    return PRESETS;
+  }, [preset, water, activeVehicle]);
+
   /** Sun state memoised on its primitives so the scene element stays stable. */
   const sun = useMemo(
     () => ({
@@ -444,6 +488,20 @@ export default function Twin() {
     setInspect(null);
   }, []);
 
+  /** Select a parked unit from a list and fly the camera to its bay. */
+  const focusVehicle = useCallback((id: string) => {
+    setView("exterior");
+    setSubmergedWater(null);
+    setActiveVehicle(id);
+    setInspect(null);
+    setPreset(VEHICLE_FOCUS);
+  }, []);
+
+  const closeVehicle = useCallback(() => {
+    setActiveVehicle(null);
+    setPreset((current) => (current === VEHICLE_FOCUS ? "overview" : current));
+  }, []);
+
   const handleLevel = useCallback(
     (next: number) => {
       const nextPlan = floorPlan(slug, next);
@@ -457,6 +515,17 @@ export default function Twin() {
   const handlePosition = useCallback((x: number, z: number, yaw: number) => {
     setPosition({ x, z, yaw });
   }, []);
+
+  /** Wall switches live here so the room panel reports the real light state. */
+  const toggleRoomLights = useCallback((id: string) => {
+    setLightsOut((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
+  // Room ids repeat between the stations, so a switch thrown at Maitri must
+  // not darken the same-named room at Bharati.
+  useEffect(() => {
+    setLightsOut({});
+  }, [slug]);
 
   /**
    * The exterior scene is memoised on its real inputs. Walking inside the
@@ -527,9 +596,21 @@ export default function Twin() {
         onPosition={handlePosition}
         onLockChange={setLocked}
         onExitWalk={leaveInterior}
+        lightsOut={lightsOut}
+        onToggleLights={toggleRoomLights}
       />
     ),
-    [slug, level, deckView, spawn, handleLevel, handlePosition, leaveInterior],
+    [
+      slug,
+      level,
+      deckView,
+      spawn,
+      lightsOut,
+      handleLevel,
+      handlePosition,
+      leaveInterior,
+      toggleRoomLights,
+    ],
   );
 
   const interior = view === "interior";
@@ -635,7 +716,7 @@ export default function Twin() {
                       {submergedBody ? (
                         <UnderwaterView def={submergedBody} />
                       ) : (
-                        <CameraRig preset={preset} presets={PRESETS} />
+                        <CameraRig preset={preset} presets={cameraPresets} />
                       )}
                     </TwinCanvas>
                   )}
@@ -874,6 +955,8 @@ export default function Twin() {
                 onClose={() => {
                   setActiveWater(null);
                   setTrackedWater(null);
+                  // A focus preset only exists while its body is selected.
+                  setPreset((current) => (current === WATER_FOCUS ? "overview" : current));
                 }}
                 onAction={(action) => onWaterAction(water.id, action)}
               />
@@ -898,7 +981,8 @@ export default function Twin() {
                   runningVehicles.includes(vehicle.id) || vehicle.running
                 }
                 onToggleEngine={() => toggleEngine(vehicle.id)}
-                onClose={() => setActiveVehicle(null)}
+                onFocus={() => focusVehicle(vehicle.id)}
+                onClose={closeVehicle}
               />
             )}
 
@@ -907,7 +991,7 @@ export default function Twin() {
                 slug={slug}
                 room={room}
                 level={level}
-                lightsOn
+                lightsOn={!lightsOut[room.id]}
                 crewHere={crewHere}
                 onLevel={(next) => {
                   const nextPlan = floorPlan(slug, next);
@@ -923,6 +1007,7 @@ export default function Twin() {
               <ObjectPanel
                 target={inspect}
                 readings={readings}
+                slug={slug}
                 onClose={() => setInspect(null)}
               />
             )}
@@ -931,9 +1016,10 @@ export default function Twin() {
               <LakesOverlay
                 lakes={stationWater("bharati").filter((b) => b.kind === "lakelet")}
                 onSelect={(id) => {
+                  setView("exterior");
+                  setSubmergedWater(null);
                   setActiveWater(id);
-                  const body = WATER_BODIES[id];
-                  setPosition({ x: body?.position[0] ?? 0, z: body?.position[1] ?? 0, yaw: 0 });
+                  setPreset(WATER_FOCUS);
                 }}
                 onClose={() => setLakesOpen(false)}
               />
@@ -1344,10 +1430,7 @@ export default function Twin() {
                 <button
                   key={unit.id}
                   type="button"
-                  onClick={() => {
-                    setActiveVehicle(unit.id);
-                    setInspect(null);
-                  }}
+                onClick={() => focusVehicle(unit.id)}
                   className={cn(
                     "flex items-center justify-between gap-2 rounded border px-3 py-2 text-left transition-colors",
                     activeVehicle === unit.id

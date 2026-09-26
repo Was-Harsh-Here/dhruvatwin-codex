@@ -290,11 +290,17 @@ function CeilingLight({
   length,
   on,
   color = "#F0F6FF",
+  power = 30,
+  cast = true,
 }: {
   position: [number, number, number];
   length: number;
   on: boolean;
   color?: string;
+  /** Luminous power of the fixture, shared out from the room's budget. */
+  power?: number;
+  /** Only some fixtures mount a real light; the rest stay emissive strips. */
+  cast?: boolean;
 }) {
   return (
     <group position={position}>
@@ -309,13 +315,15 @@ function CeilingLight({
       <Box p={[0, 0.12, 0]} s={[length + 0.12, 0.12, 0.42]} color={INT.steel} metalness={0.7} roughness={0.35} />
       {/* Always mounted, intensity driven: keeps the light count stable so the
           shader is never recompiled when a room switch is thrown. */}
-      <pointLight
-        position={[0, -1.2, 0]}
-        intensity={on ? 30 : 0}
-        distance={length * 1.8 + 6}
-        decay={2}
-        color={color}
-      />
+      {cast && (
+        <pointLight
+          position={[0, -1.2, 0]}
+          intensity={on ? power : 0}
+          distance={length * 1.8 + 6}
+          decay={2}
+          color={color}
+        />
+      )}
     </group>
   );
 }
@@ -429,6 +437,18 @@ export function RoomShell({
   }, [door?.side]);
 
   const lightRows = Math.max(1, Math.round(room.w / 4));
+  // Every extra point light is a per-fragment loop paid by the whole deck, so
+  // only the first few fixtures in a row actually cast one. Bharati's
+  // fourteen-metre modules would otherwise mount over fifty lights at once.
+  // The dropped strips stay emissive, and the survivors carry their share of
+  // the power, so the room keeps its brightness for a fraction of the cost.
+  const litRows = Math.min(lightRows, room.w > 24 ? 3 : 2);
+  const lit = new Set(
+    Array.from({ length: litRows }, (_, k) =>
+      litRows === 1 ? 0 : Math.round((k * (lightRows - 1)) / (litRows - 1)),
+    ),
+  );
+  const power = (30 * lightRows) / litRows;
 
   return (
     <InteriorContext.Provider
@@ -459,6 +479,8 @@ export function RoomShell({
             ]}
             length={Math.min(span * 0.62, 2.6)}
             on={lightsOn}
+            power={power}
+            cast={lit.has(i)}
           />
         );
       })}

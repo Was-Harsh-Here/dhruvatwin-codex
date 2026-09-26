@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { catalogFor } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
 import {
   Box,
@@ -15,6 +16,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import { Link } from "react-router";
 import type { RoomDef } from "./interiors/plan-types";
 import { floorPlan } from "./interiors/plans";
 import type { InspectTarget } from "./interiors/kit";
@@ -298,13 +300,18 @@ export function RoomPanel({
 export function ObjectPanel({
   target,
   readings,
+  slug,
   onClose,
 }: {
   target: InspectTarget;
   readings: Array<{ equipmentId: string; parameter: string; value: number; unit: string; decimals: number; status: string }>;
+  slug: string;
   onClose: () => void;
 }) {
   const linked = target.tag ? readings.filter((r) => r.equipmentId === target.tag) : [];
+  const instrumented = Boolean(
+    target.tag && catalogFor(slug).some((entry) => entry.equipmentId === target.tag),
+  );
   return (
     <Card className="cc-panel border-border shadow-none">
       <CardHeader className="pb-2">
@@ -344,14 +351,16 @@ export function ObjectPanel({
           </div>
         )}
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" className="text-xs">
-            View equipment
+          <Button asChild size="sm" variant="outline" className="text-xs">
+            <Link to={instrumented ? `/equipment/${target.tag}` : `/catalog?station=${slug}`}>
+              {instrumented ? "Equipment record" : "Equipment catalogue"}
+            </Link>
           </Button>
-          <Button size="sm" variant="outline" className="text-xs">
-            Historical data
+          <Button asChild size="sm" variant="outline" className="text-xs">
+            <Link to={`/dashboard?station=${slug}`}>Live telemetry</Link>
           </Button>
-          <Button size="sm" variant="outline" className="text-xs">
-            Report issue
+          <Button asChild size="sm" variant="outline" className="text-xs">
+            <Link to={`/workspace?station=${slug}`}>Log an observation</Link>
           </Button>
         </div>
       </CardContent>
@@ -367,14 +376,18 @@ export function VehiclePanel({
   vehicle,
   running,
   onToggleEngine,
+  onFocus,
   onClose,
 }: {
   vehicle: VehicleInstance;
   running: boolean;
   onToggleEngine: () => void;
+  /** Flies the camera to the unit's place in the yard. */
+  onFocus?: () => void;
   onClose: () => void;
 }) {
   const tone = statusTone(vehicle.status);
+  const station = vehicle.id.startsWith("maitri") ? "maitri" : "bharati";
   return (
     <Card className="cc-panel border-border shadow-none">
       <CardHeader className="pb-2">
@@ -422,11 +435,13 @@ export function VehiclePanel({
               {running ? "Stop engine" : "Start engine"}
             </Button>
           )}
-          <Button size="sm" variant="outline" className="text-xs">
-            View maintenance log
-          </Button>
-          <Button size="sm" variant="outline" className="text-xs">
-            Assign to task
+          {onFocus && (
+            <Button size="sm" variant="outline" className="text-xs" onClick={onFocus}>
+              Show in yard
+            </Button>
+          )}
+          <Button asChild size="sm" variant="outline" className="text-xs">
+            <Link to={`/workspace?station=${station}`}>Log maintenance</Link>
           </Button>
         </div>
       </CardContent>

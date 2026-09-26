@@ -95,7 +95,7 @@ const PRIYADARSHINI: WaterBodyDef = {
     { label: "Volume", value: "178,000 m3" },
     { label: "Flow to station", value: "12 L/min" },
     { label: "Trace heating", value: "ACTIVE", note: "4.8 ohm loop, 6.2 A" },
-    { label: "Days to complete freeze", value: "24 days", note: "target 95 % accuracy" },
+    { label: "Days to complete freeze", value: "24 days", note: "target 95% accuracy" },
   ],
   iceCoverage: [92, 96, 99, 100, 100, 100, 100, 100, 98, 92, 78, 62],
   iceThicknessCm: 82,
