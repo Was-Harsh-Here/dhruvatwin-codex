@@ -170,7 +170,7 @@ export default function AntarcticMode() {
             <div className="text-[24px] font-bold uppercase tracking-wider text-white">
               Antarctic Mode - {stationName}
             </div>
-            <div className="font-mono text-[16px] text-white">
+            <div className="font-mono text-[18px] text-white">
               {formatUtc(now)} - link {link.status} - queue {link.pending}
             </div>
           </div>
@@ -180,13 +180,13 @@ export default function AntarcticMode() {
             <div className="font-mono text-[28px] font-bold leading-none text-[#FFD700]">
               {ambient ? ambient.value.toFixed(1) : "--"}
             </div>
-            <div className="text-[14px] uppercase text-white">deg C</div>
+            <div className="text-[18px] uppercase text-white">deg C</div>
           </div>
           <div className="border-4 border-white px-4 py-2 text-center">
             <div className="font-mono text-[28px] font-bold leading-none text-[#FFD700]">
               {wind ? wind.value.toFixed(0) : "--"}
             </div>
-            <div className="text-[14px] uppercase text-white">m/s wind</div>
+            <div className="text-[18px] uppercase text-white">m/s wind</div>
           </div>
           {screen !== "home" ? (
             <button
@@ -397,7 +397,7 @@ export default function AntarcticMode() {
               <div className="font-mono text-[28px] font-bold text-[#FFD700]">
                 {gps ? `${gps.latitude}, ${gps.longitude}` : "acquiring"}
               </div>
-              <div className="text-[16px]">
+              <div className="text-[18px]">
                 {gps ? `accuracy ${gps.accuracy} m` : gpsError ?? "waiting for fix"}
               </div>
             </div>
@@ -473,21 +473,21 @@ export default function AntarcticMode() {
                 <div className="font-mono text-[28px] font-bold text-[#FFD700]">
                   {currentWeather ? currentWeather.temperature.toFixed(1) : "--"}
                 </div>
-                <div className="text-[16px]">deg C</div>
+                <div className="text-[18px]">deg C</div>
               </div>
               <div className="border-4 border-white px-5 py-5 text-center">
                 <div className="text-[18px] uppercase">Wind speed</div>
                 <div className="font-mono text-[28px] font-bold text-[#FFD700]">
                   {currentWeather ? currentWeather.windSpeed.toFixed(1) : "--"}
                 </div>
-                <div className="text-[16px]">m/s</div>
+                <div className="text-[18px]">m/s</div>
               </div>
               <div className="border-4 border-white px-5 py-5 text-center">
                 <div className="text-[18px] uppercase">Pressure</div>
                 <div className="font-mono text-[28px] font-bold text-[#FFD700]">
                   {currentWeather ? currentWeather.pressure.toFixed(0) : "--"}
                 </div>
-                <div className="text-[16px]">hPa</div>
+                <div className="text-[18px]">hPa</div>
               </div>
             </div>
 
@@ -501,7 +501,7 @@ export default function AntarcticMode() {
                     <div className="font-mono text-[28px] font-bold text-[#FFD700]">
                       {row.temperature.toFixed(0)}
                     </div>
-                    <div className="text-[16px]">deg C</div>
+                    <div className="text-[18px]">deg C</div>
                     <div className="font-mono text-[18px] text-white">
                       {row.windSpeed.toFixed(0)} m/s
                     </div>
@@ -536,7 +536,7 @@ export default function AntarcticMode() {
               <div className="font-mono text-[28px] font-bold text-[#FFD700]">
                 {gps ? `${gps.longitude}` : "GPS fix"}
               </div>
-              <div className="text-[16px]">
+              <div className="text-[18px]">
                 {gps ? `accuracy ${gps.accuracy} m` : gpsError ?? "waiting for fix"}
               </div>
             </div>
@@ -583,7 +583,7 @@ export default function AntarcticMode() {
       </main>
 
       <footer className="border-t-4 border-white px-6 py-5">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 text-[16px] text-white">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 text-[18px] text-white">
           <span>DhruvaTwin - Antarctic Mode - Team HackFinity - PS 26060</span>
           <span className="font-mono">
             {link.broker} - {link.status} - {link.published} frames - {link.pending} queued
