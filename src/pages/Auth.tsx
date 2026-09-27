@@ -300,7 +300,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
           <div className="py-4 px-6 text-xs text-center text-muted-foreground bg-muted border-t rounded-b-lg">
             <div className="font-display font-bold uppercase tracking-wider text-foreground">
-              DhruvaTwin - Team HackFinity - PS 26060
+              DhruvaTwin - Team HackFinity007 - PS 26060
             </div>
             <div className="mt-0.5">Smart India Hackathon 2026 - Secured by freebuff.com</div>
           </div>

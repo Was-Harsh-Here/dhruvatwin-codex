@@ -2,7 +2,7 @@
 
 Offline-first Digital Twin platform for the Indian Antarctic research stations at Maitri and Bharati.
 
-- Team: **HackFinity**
+- Team: **HackFinity007**
 - Problem Statement ID: **26060**
 - Theme: **Smart Automation**
 - Category: **Software**

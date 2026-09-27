@@ -25,7 +25,7 @@ export function stationFromParams(
 /** Project identity shown in chrome and footers. */
 export const PROJECT_IDENTITY = {
   name: "DhruvaTwin",
-  team: "HackFinity",
+  team: "HackFinity007",
   psId: "26060",
   theme: "Smart Automation",
   event: "Smart India Hackathon 2026",

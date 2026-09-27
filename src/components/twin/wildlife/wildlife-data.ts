@@ -797,7 +797,7 @@ export const DEV_PROFILE = {
   blurb:
     "On site with the twin. He stands with the Adelie colony on the shore, and he keeps the digital twin desk in the command room running the rest of the day.",
   facts: [
-    "Role: expedition systems and digital twin administrator, on the HackFinity team for problem statement 26060 (SIH 2026).",
+    "Role: expedition systems and digital twin administrator, on the HackFinity007 team for problem statement 26060 (SIH 2026).",
     "Owns the sensor ingest, the MQTT link and the offline outbox at the station end, so the console keeps reading when the uplink does not.",
     "Keeps the twin model in step with the real buildings: room plans, equipment tags and the survey grid over the apron.",
     "Runs the cascade drills and the FPGA self-healing self-tests, and signs the results into the audit chain.",

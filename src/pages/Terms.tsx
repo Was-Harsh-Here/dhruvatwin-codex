@@ -12,7 +12,7 @@ const SECTIONS: LegalSection[] = [
     id: "service",
     heading: "What DhruvaTwin is",
     paragraphs: [
-      "DhruvaTwin is a digital twin platform for the Indian Antarctic stations Maitri and Bharati, built by Team HackFinity for Smart India Hackathon 2026 under problem statement 26060 with the National Centre for Polar and Ocean Research, Ministry of Earth Sciences. It models the station environments, sensors, plant, interiors, wildlife and logistics for training, research, demonstration and education.",
+      "DhruvaTwin is a digital twin platform for the Indian Antarctic stations Maitri and Bharati, built by Team HackFinity007 for Smart India Hackathon 2026 under problem statement 26060 with the National Centre for Polar and Ocean Research, Ministry of Earth Sciences. It models the station environments, sensors, plant, interiors, wildlife and logistics for training, research, demonstration and education.",
       "The platform is a prototype. Sensor channels, plant behaviour, wildlife placement, voyages and forecasts presented in the twin are simulated or modelled for demonstration unless a screen explicitly states that a value comes from a live public source.",
     ],
   },

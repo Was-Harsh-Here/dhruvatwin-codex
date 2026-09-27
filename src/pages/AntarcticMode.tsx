@@ -584,7 +584,7 @@ export default function AntarcticMode() {
 
       <footer className="border-t-4 border-white px-6 py-5">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 text-[18px] text-white">
-          <span>DhruvaTwin - Antarctic Mode - Team HackFinity - PS 26060</span>
+          <span>DhruvaTwin - Antarctic Mode - Team HackFinity007 - PS 26060</span>
           <span className="font-mono">
             {link.broker} - {link.status} - {link.published} frames - {link.pending} queued
           </span>
