@@ -9,8 +9,21 @@ import { BharatiScene } from "@/components/twin/BharatiScene";
 import {
   CameraRig,
   TwinCanvas,
+  setTwinDisplay,
+  useTwinDisplay,
   type CameraPreset,
 } from "@/components/twin/twin-primitives";
+import { DRONE_TOURS } from "@/components/twin/drone-tours";
+import { DroneFlight, DroneTourPanel, useDroneTour } from "@/components/twin/DroneTour";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { TwoAndHalfD } from "@/components/twin/TwoAndHalfD";
 import { VIEW_MODES, type ViewMode } from "@/components/twin/view-modes";
 import { FLEET, VEHICLE_CLASSES, fleetCount, vehiclePosition } from "@/components/twin/VehicleFleet";
@@ -46,19 +59,33 @@ import {
 } from "@/lib/station";
 import {
   Box,
+  ChevronDown,
   Cpu,
   Crosshair,
   DoorOpen,
+  Eye,
   Footprints,
+  Grid3x3,
   Layers,
   Loader2,
   Mountain,
   Radio,
+  RotateCcw,
   Satellite,
   Thermometer,
   TriangleAlert,
+  Video,
 } from "lucide-react";
-import { Component, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Component,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useSearchParams } from "react-router";
 import { cn } from "@/lib/utils";
 
@@ -183,7 +210,7 @@ class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean
   }
 }
 
-type ViewKind = "exterior" | "interior" | "isometric";
+type ViewKind = "exterior" | "interior" | "isometric" | "drone";
 
 /** Injected camera preset used when a body with no preset of its own is picked. */
 const WATER_FOCUS = "water-focus";
@@ -218,6 +245,10 @@ export default function Twin() {
   const [preset, setPreset] = useState("overview");
   const [viewMode, setViewMode] = useState<ViewMode>("exterior");
   const [active, setActive] = useState<string | null>(null);
+  /** Bumped on every explicit camera request so a preset can re-fly. */
+  const [flyKey, setFlyKey] = useState(0);
+  const display = useTwinDisplay();
+  const drone = useDroneTour(DRONE_TOURS[slug]);
 
   const time = useTimeOfDay(latitude);
   const readingsRaw = useQuery(api.telemetry.getLiveReadings, { slug });
@@ -314,6 +345,39 @@ export default function Twin() {
     return targets;
   }, [slug]);
 
+  /**
+   * Request a camera pose. The rig flies there once and then releases the
+   * camera completely, so free orbiting always wins over the last preset.
+   */
+  const flyTo = useCallback((id: string) => {
+    setPreset(id);
+    setFlyKey((key) => key + 1);
+  }, []);
+
+  /**
+   * Open a structure picked on the station plot.
+   *
+   * The plot block carries the hotspot id, so clicking it selects the object and
+   * flies the camera to the matching viewpoint when one exists.
+   */
+  const openPlotObject = useCallback(
+    (hotspotId: string) => {
+      setView("exterior");
+      setSubmergedWater(null);
+      setActive(hotspotId);
+      setInspect(null);
+      const presetFor: Record<string, string> = {
+        "main-station": slug === "maitri" ? "maitri" : "bharati",
+        lake: "lake",
+        fjord: "fjord",
+        bay: "bay",
+      };
+      const next = presetFor[hotspotId];
+      if (next) flyTo(next);
+    },
+    [flyTo, slug],
+  );
+
   const applyTarget = useCallback(
     (target: TeleportTarget) => {
       setTeleportOpen(false);
@@ -331,7 +395,7 @@ export default function Twin() {
         }
         setView("exterior");
         setSubmergedWater(null);
-        setPreset(target.preset);
+        flyTo(target.preset);
       }
       if (target.level !== undefined && target.spawn) {
         setView("interior");
@@ -347,16 +411,16 @@ export default function Twin() {
         const body = WATER_BODIES[target.waterId];
         const matching =
           body?.kind === "fjord" ? "fjord" : body?.kind === "bay" ? "bay" : "lake";
-        if (body?.station === slug) setPreset(matching);
+        if (body?.station === slug) flyTo(matching);
       }
       if (target.vehicleId) {
         setView("exterior");
         setActiveVehicle(target.vehicleId);
         setInspect(null);
-        setPreset(VEHICLE_FOCUS);
+        flyTo(VEHICLE_FOCUS);
       }
     },
-    [setParams, slug],
+    [flyTo, setParams, slug],
   );
 
   const applyPreset = useCallback(
@@ -371,10 +435,11 @@ export default function Twin() {
           { replace: true },
         );
       }
-      setPreset(next.id);
+      setView("exterior");
       setSubmergedWater(null);
+      flyTo(next.id);
     },
-    [setParams, slug],
+    [flyTo, setParams, slug],
   );
 
   const enterInterior = useCallback(() => {
@@ -406,6 +471,31 @@ export default function Twin() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [deckView, leaveInterior, locked, view]);
+
+  /** A station switch restarts the tour so every pose matches the site. */
+  const restartDrone = drone.restart;
+  useEffect(() => {
+    restartDrone();
+  }, [slug, restartDrone]);
+
+  /**
+   * Entering the drone view starts the tour from the top; leaving it pauses the
+   * tour so it is not running unseen behind another screen.
+   */
+  const previousView = useRef<ViewKind>("exterior");
+  const droneRef = useRef(drone);
+  droneRef.current = drone;
+  useEffect(() => {
+    const wasDrone = previousView.current === "drone";
+    previousView.current = view;
+    if (view === "drone" && !wasDrone) {
+      droneRef.current.restart();
+      return;
+    }
+    if (view !== "drone" && wasDrone && droneRef.current.playing) {
+      droneRef.current.toggle();
+    }
+  }, [view]);
 
   const onWaterAction = useCallback(
     (bodyId: string, action: { id: string; label: string }) => {
@@ -489,13 +579,16 @@ export default function Twin() {
   }, []);
 
   /** Select a parked unit from a list and fly the camera to its bay. */
-  const focusVehicle = useCallback((id: string) => {
-    setView("exterior");
-    setSubmergedWater(null);
-    setActiveVehicle(id);
-    setInspect(null);
-    setPreset(VEHICLE_FOCUS);
-  }, []);
+  const focusVehicle = useCallback(
+    (id: string) => {
+      setView("exterior");
+      setSubmergedWater(null);
+      setActiveVehicle(id);
+      setInspect(null);
+      flyTo(VEHICLE_FOCUS);
+    },
+    [flyTo],
+  );
 
   const closeVehicle = useCallback(() => {
     setActiveVehicle(null);
@@ -627,9 +720,10 @@ export default function Twin() {
               {stationLabel} 3D twin
             </h1>
             <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              One interactive world: 1.7 km of orbitable terrain outside, every room of the
-              station walkable inside, every water body clickable, every vehicle modelled with
-              its own maintenance record. Seven view modes, a 2.5D cutaway, a time of day
+              One interactive world: orbitable terrain outside, the survey grid and range rings
+              over the apron, every room of the station walkable inside, every water body
+              clickable, every vehicle modelled with its own maintenance record. Free camera by
+              default, a narrated drone tour, seven view modes, a 2.5D cutaway, a time of day
               slider and a ten second seasonal timelapse.
             </p>
           </div>
@@ -638,6 +732,7 @@ export default function Twin() {
               {(
                 [
                   { id: "exterior", label: "Exterior", icon: Mountain },
+                  { id: "drone", label: "Drone Tour", icon: Video },
                   { id: "interior", label: "Interior", icon: DoorOpen },
                   { id: "isometric", label: "2.5D", icon: Layers },
                 ] as const
@@ -705,6 +800,16 @@ export default function Twin() {
                     <TwinCanvas fogColor="#05080D" fogNear={30} fogFar={120} cameraPosition={[0, 1.7, 0]}>
                       {interiorScene}
                     </TwinCanvas>
+                  ) : view === "drone" ? (
+                    <TwinCanvas
+                      fogColor="#0B1622"
+                      fogNear={180}
+                      fogFar={420}
+                      cameraPosition={DRONE_TOURS[slug][0].position}
+                    >
+                      {exteriorScene}
+                      <DroneFlight tour={drone} />
+                    </TwinCanvas>
                   ) : (
                     <TwinCanvas
                       fogColor={underwater ? "#04141F" : "#0B1622"}
@@ -716,7 +821,7 @@ export default function Twin() {
                       {submergedBody ? (
                         <UnderwaterView def={submergedBody} />
                       ) : (
-                        <CameraRig preset={preset} presets={cameraPresets} />
+                        <CameraRig preset={preset} presets={cameraPresets} flyKey={flyKey} />
                       )}
                     </TwinCanvas>
                   )}
@@ -728,48 +833,132 @@ export default function Twin() {
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(159,228,255,0.22),rgba(4,20,31,0.85))]" />
               )}
 
-              {/* View mode dock */}
-              {view === "exterior" && !underwater && (
-                <div className="absolute left-3 top-3 flex flex-col gap-1">
-                  <span className="cc-label px-1 pb-0.5 text-[9px]">View mode</span>
-                  {VIEW_MODES.map((mode) => (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      title={mode.hint}
-                      onClick={() => setViewMode(mode.id)}
-                      className={cn(
-                        "rounded border px-2.5 py-1 text-left text-[10px] font-semibold uppercase tracking-wider backdrop-blur transition-colors",
-                        viewMode === mode.id
-                          ? "border-primary/60 bg-primary/15 text-primary"
-                          : "border-border bg-[#060B14]/70 text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {mode.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {/*
+                Scene toolbar.
 
-              {/* Camera presets */}
+                The seven view modes, the camera presets and the scene layers
+                live in three compact menus instead of three open columns, so
+                the viewport stays readable while every control is still one
+                click away.
+              */}
               {view === "exterior" && !underwater && (
-                <div className="absolute left-40 top-3 flex max-h-[420px] flex-col gap-1 overflow-y-auto">
-                  <span className="cc-label px-1 pb-0.5 text-[9px]">Camera</span>
-                  {PRESETS.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => applyPreset(p)}
-                      className={cn(
-                        "rounded border px-2.5 py-1 text-left text-[10px] font-semibold uppercase tracking-wider backdrop-blur transition-colors",
-                        preset === p.id
-                          ? "border-primary/60 bg-primary/15 text-primary"
-                          : "border-border bg-[#060B14]/70 text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+                <div className="absolute left-3 top-3 flex flex-wrap items-center gap-1.5">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1.5 rounded border border-border bg-[#060B14]/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-foreground backdrop-blur transition-colors hover:border-primary/40"
+                      >
+                        <Eye className="size-3" />
+                        {activeMode.label}
+                        <ChevronDown className="size-3 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-64">
+                      <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        View mode
+                      </DropdownMenuLabel>
+                      {VIEW_MODES.map((mode) => (
+                        <DropdownMenuItem
+                          key={mode.id}
+                          className="flex flex-col items-start gap-0.5"
+                          onSelect={() => setViewMode(mode.id)}
+                        >
+                          <span
+                            className={cn(
+                              "text-xs font-semibold",
+                              viewMode === mode.id && "text-primary",
+                            )}
+                          >
+                            {mode.label}
+                          </span>
+                          <span className="text-[10px] leading-snug text-muted-foreground">
+                            {mode.hint}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1.5 rounded border border-border bg-[#060B14]/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-foreground backdrop-blur transition-colors hover:border-primary/40"
+                      >
+                        <Crosshair className="size-3" />
+                        Camera
+                        <ChevronDown className="size-3 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56">
+                      <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Fly to a viewpoint
+                      </DropdownMenuLabel>
+                      {PRESETS.map((p) => (
+                        <DropdownMenuItem key={p.id} onSelect={() => applyPreset(p)}>
+                          <span
+                            className={cn("text-xs", preset === p.id && "text-primary")}
+                          >
+                            {p.label}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => flyTo("overview")}>
+                        <RotateCcw className="mr-2 size-3" />
+                        <span className="text-xs">Reset to overview</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1.5 rounded border border-border bg-[#060B14]/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-foreground backdrop-blur transition-colors hover:border-primary/40"
+                      >
+                        <Grid3x3 className="size-3" />
+                        Layers
+                        <ChevronDown className="size-3 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-64">
+                      <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Scene layers
+                      </DropdownMenuLabel>
+                      <DropdownMenuCheckboxItem
+                        checked={display.labels}
+                        onCheckedChange={(value) => setTwinDisplay({ labels: Boolean(value) })}
+                      >
+                        <span className="text-xs">Telemetry and object labels</span>
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={display.survey}
+                        onCheckedChange={(value) => setTwinDisplay({ survey: Boolean(value) })}
+                      >
+                        <span className="text-xs">Survey grid, rings and contours</span>
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={display.hotspots}
+                        onCheckedChange={(value) => setTwinDisplay({ hotspots: Boolean(value) })}
+                      >
+                        <span className="text-xs">Hotspot markers</span>
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          setTwinDisplay({ labels: true, survey: true, hotspots: true })
+                        }
+                      >
+                        <span className="text-xs">Show every layer</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <span className="cc-mono rounded border border-[#00E0C6]/30 bg-[#060B14]/80 px-2.5 py-1 text-[10px] uppercase tracking-wider text-[#00E0C6] backdrop-blur">
+                    free view
+                  </span>
                 </div>
               )}
 
@@ -894,52 +1083,57 @@ export default function Twin() {
                   position={position}
                   activeWater={activeWater}
                   onTeleport={applyTarget}
+                  onSelectObject={openPlotObject}
+                  onSelectWater={(bodyId) => {
+                    setView("exterior");
+                    setSubmergedWater(null);
+                    setActiveWater(bodyId);
+                    flyTo(WATER_FOCUS);
+                  }}
                 />
               </div>
 
-              {/* Legend */}
-              <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-3 rounded border border-border bg-[#060B14]/70 px-3 py-1.5 backdrop-blur">
-                <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span className="size-2 rounded-full bg-[#00E0C6]" /> Hotspot
-                </span>
-                <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span className="size-2 rounded-full bg-[#FFB020]" /> Airlock and AI forecast
-                </span>
-                <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span className="size-2 rounded-full bg-[#FF3B47]" /> Selected
-                </span>
-                <span className="cc-mono text-[10px] text-muted-foreground">
-                  {underwater
-                    ? "dive active - return to surface from the water panel"
-                    : interior
-                      ? deckView === "walk"
-                        ? "walking"
-                        : "deck plan"
-                      : "drag to orbit - scroll to zoom"}
-                </span>
-              </div>
-
-              {/* Mode hint */}
-              <div className="absolute bottom-24 left-3 max-w-[240px] rounded border border-border bg-[#060B14]/80 px-3 py-1.5 backdrop-blur">
-                <div className="cc-label text-[9px]">
-                  {underwater
-                    ? "Underwater view"
-                    : interior
-                      ? plan?.name ?? "Interior"
-                      : view === "isometric"
-                        ? "2.5D isometric cutaway"
-                        : activeMode.label}
+              {/* Drone tour narration */}
+              {view === "drone" && (
+                <div className="absolute bottom-3 left-3">
+                  <DroneTourPanel tour={drone} onExit={() => setView("exterior")} />
                 </div>
-                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  {underwater
-                    ? `${submergedBody?.name}: seabed relief, boulders, fish, bubbles and the submerged intake line.`
-                    : interior
-                      ? `Click any fixture inside the room to open its detail panel. ${plan?.rooms.length ?? 0} rooms on this deck.`
-                      : view === "isometric"
-                        ? "Terrain as flat tiles with each room extruded as a cutaway block and live data floating above it."
-                        : activeMode.hint}
-                </p>
-              </div>
+              )}
+
+              {/* Legend and context line, merged into one block */}
+              {view !== "drone" && (
+                <div className="absolute bottom-3 left-3 max-w-[420px] rounded border border-border bg-[#060B14]/80 px-3 py-1.5 backdrop-blur">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <span className="size-2 rounded-full bg-[#00E0C6]" /> Hotspot
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <span className="size-2 rounded-full bg-[#FFB020]" /> Airlock
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <span className="size-2 rounded-full bg-[#FF3B47]" /> Selected
+                    </span>
+                    <span className="cc-label text-[9px]">
+                      {underwater
+                        ? "Underwater view"
+                        : interior
+                          ? plan?.name ?? "Interior"
+                          : view === "isometric"
+                            ? "2.5D isometric cutaway"
+                            : activeMode.label}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                    {underwater
+                      ? `${submergedBody?.name}: seabed relief, boulders, fish, bubbles and the submerged intake line.`
+                      : interior
+                        ? `Click any fixture inside the room to open its detail panel. ${plan?.rooms.length ?? 0} rooms on this deck.`
+                        : view === "isometric"
+                          ? "Terrain as flat tiles with each room extruded as a cutaway block and live data floating above it."
+                          : `${activeMode.hint} Free view: drag to orbit, right-drag to pan, scroll to zoom.`}
+                  </p>
+                </div>
+              )}
             </div>
           </Card>
 

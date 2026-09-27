@@ -27,15 +27,19 @@ const STATION_FACTS: Record<string, string> = {
     "Bharati (2012, Larsemann Hills, North Grovnes Island, 69\u00B024'41\"S 76\u00B011'15\"E, 3,098 km from Maitri). 134 shipping containers with composite skin, capacity 47 plus 25 emergency. Power: 3 CHP units rated 100 kVA electrical and 150 kW thermal each. Fuel farm 300,000 litres in 13 tanks. Water from seawater pumps through a 450 m intake. Lab 270 sq ft. Nearby: Thala Fjord, Quilty Bay, Progress (Russia 8 km), Zhongshan (China).",
 };
 
-const SYSTEM_PROMPT = `You are the DhruvaTwin station assistant for the Indian Antarctic research programme operated by NCPOR under the Ministry of Earth Sciences.
-Answer as a calm, precise operations analyst. Use only the live station context supplied and the station facts given to you.
-Rules:
-- Never invent sensor values, personnel names or procedures that are not in the context.
-- If the context does not cover the question, say what data would be needed and where in the console it lives.
-- Prefer short, structured answers: a one-line assessment, then up to four bullet actions.
-- Refer to alert severities as critical, warning, watch or info.
-- Units are metric; times are UTC.
+const SYSTEM_PROMPT = `You are the DhruvaTwin station assistant for the Indian Antarctic research programme operated by NCPOR under the Ministry of Earth Sciences. You are a general-purpose assistant with privileged access to one station's live context.
+
+Decide what the question needs and answer accordingly:
+1. Operational question about the station: ground the answer in the live context. Never invent sensor values, personnel names, procedures or incidents that are not in the context.
+2. General question - polar science, engineering, history, definitions, how something works, writing help, or anything outside the station: answer it properly from your own knowledge. Do not refuse, and do not force the station context into an unrelated answer.
+3. Mixed question: answer the general part from knowledge, then add the station-specific part from the context.
+
+Style:
+- Lead with a direct answer in one sentence, then at most four short bullets when structure helps. For a simple general question, prose is fine and bullets are not required.
+- Be substantive but compact: no padding, no restating the question, no apologies.
+- Refer to alert severities as critical, warning, watch or info. Units are metric; times are UTC.
 - The continuity model is reported with a target 95% accuracy and must be described that way.
+- If an operational question needs data the context does not contain, say which console screen holds it.
 - Never use emojis.`;
 
 /** Compact context block assembled from live Convex queries. */
@@ -58,10 +62,10 @@ async function buildContext(ctx: ActionCtx, slug: string): Promise<string> {
   lines.push(
     `TELEMETRY (${readings.length} live channels, ${worst.length} outside nominal):`,
   );
-  for (const r of readings.slice(0, 28)) {
+  for (const r of readings.slice(0, 16)) {
     lines.push(`  ${r.equipmentId} | ${r.parameter} = ${r.value.toFixed(r.decimals)} ${r.unit} [${r.status}]`);
   }
-  for (const r of worst.slice(0, 10)) {
+  for (const r of worst.slice(0, 6)) {
     lines.push(`  OUT-OF-BAND ${r.equipmentId} ${r.parameter} = ${r.value.toFixed(r.decimals)} ${r.unit} [${r.status}]`);
   }
   lines.push(`OPEN INCIDENTS (${alerts.length}):`);
@@ -97,6 +101,88 @@ async function buildContext(ctx: ActionCtx, slug: string): Promise<string> {
   }
   return lines.join("\n");
 }
+
+/**
+ * Reference block for the offline rule engine.
+ *
+ * Without a model key the assistant cannot answer arbitrary questions, but
+ * these are the topics this console is actually used to think about, so they
+ * are answered properly and flagged as reference rather than guessed at.
+ */
+const REFERENCE: Array<{ terms: string[]; answer: string }> = [
+  {
+    terms: ["antarctic treaty", "madrid protocol", "treaty", "environmental protocol"],
+    answer: [
+      "The Antarctic Treaty (1959) reserves the continent for peaceful and scientific use, and India is a consultative party.",
+      "- The Madrid Protocol (1991) adds environmental protection: all waste is removed or treated, and discharges are regulated.",
+      "- That is why Bharati treats wastewater on site and why fuel storage is bunded with leak detection.",
+      "- Nothing may be left on the continent: structures are removed when they fall out of use, which is why the buried Dakshin Gangotri site is a documented exception, not the norm.",
+    ].join("\n"),
+  },
+  {
+    terms: ["katabatic", "wind", "blizzard", "sastrugi"],
+    answer: [
+      "Katabatic wind is cold dense air that drains under gravity from the ice sheet interior toward the coast.",
+      "- It is strongest where the slope is steep and the surface is cold, which is why coastal stations see sudden gales rather than gradual fronts.",
+      "- Wind speed drives the station's Antarctic Mode gate and the satellite blackout prediction, because it loads the VSAT dish and the antenna pedestal.",
+      "- Snow is quarried and redeposited as sastrugi, which is why station hulls sit on pillars or raised footings.",
+    ].join("\n"),
+  },
+  {
+    terms: ["triple modular", "tmr", "single event upset", "seu", "fpga", "radiation"],
+    answer: [
+      "Triple modular redundancy holds three copies of the same configuration word and drives the logic from the majority vote.",
+      "- A single-event upset in one copy is outvoted, so the logic output stays correct even though the copy is wrong.",
+      "- A scrubber pass rewrites the wrong copy from the majority result, which resets the exposure before a second upset can land in it.",
+      "- Two upsets in the same copy defeat voting: the majority is then wrong, and only the CRC signature catches it. That case is detected and reported as uncorrectable rather than hidden, and the scrub interval is sized so it stays improbable.",
+    ].join("\n"),
+  },
+  {
+    terms: ["desalination", "reverse osmosis", "water freeze", "heating", "heating cable", "trace heat"],
+    answer: [
+      "Polar water systems are designed around two failure modes: freezing and contamination.",
+      "- Trace heating on a pipeline only buys time. Maitri's heated line can freeze in about 45 minutes if the heating circuit trips, so the procedure is to restore the spare circuit, not to postpone the work.",
+      "- Reverse osmosis needs feed pressure and above-freezing feed: at Bharati the 450 m seawater intake is the first suspect for any flow loss, because ice blockage looks the same as a pump fault.",
+      "- Drain legs, dry air blankets and keep-warm circuits on idle spurs matter more in winter than insulation alone, because insulation only slows heat loss.",
+    ].join("\n"),
+  },
+  {
+    terms: ["npdc", "metadata", "data policy", "dataset"],
+    answer: [
+      "NPDC is the National Polar Data Centre at NCPOR: the Indian node for polar data management (also referred to as a Polar Data Centre within the international polar data network).",
+      "- It requires metadata before data: a dataset is published with the standard it follows, the station, a dataset identifier and a record count.",
+      "- In this console the Compliance screen validates and exports that metadata, and every export is written to the audit chain.",
+      "- Records are attributed to the operator who generated them, which is why the export log stores a generated-by user.",
+    ].join("\n"),
+  },
+  {
+    terms: ["diesel generator", "generator maintenance", "prime mover", "service interval"],
+    answer: [
+      "Station diesel generators are maintained on hours, not on calendar time.",
+      "- Duty rotation spreads running hours across the fleet so no set reaches its service window early.",
+      "- Watch exhaust temperature, fuel pressure and bus frequency: a dropping exhaust temperature at constant load usually means a fouled injector, and frequency drift means the governor.",
+      "- Keep the standby set warm and prove the start sequence weekly, because a cold start under load is where the failures show up.",
+    ].join("\n"),
+  },
+  {
+    terms: ["ice shelf", "sea ice", "iceberg", "calving", "ice thickness"],
+    answer: [
+      "Sea ice is frozen ocean, formed and melted seasonally; an ice shelf is grounded glacier ice that has flowed onto the sea and is still attached.",
+      "- Fast ice is held in place by coastlines and grounded icebergs, which is why stations on fast ice can be supplied overland.",
+      "- Calving is the loss of ice at the shelf front, not melting: melting happens at the base and surface, calving happens at the edge.",
+      "- In the twin, ice thickness and coverage per water body come from the water model and are shown on each body's panel.",
+    ].join("\n"),
+  },
+  {
+    terms: ["maitri", "bharati", "dakshin gangotri", "isea", "expedition"],
+    answer: [
+      "India has operated four Antarctic station sites: Dakshin Gangotri (1983, now buried), Maitri (1989), Bharati (2012) and the planned Maitri II.",
+      "- Maitri sits in the Schirmacher Oasis about 100 km from the coast, a steel structure on iron pillars, capacity 25 winter-over.",
+      "- Bharati sits on North Grovnes Island in the Larsemann Hills, 3,098 km east of Maitri, 134 containers with a composite skin, capacity 47 plus 25 emergency berths.",
+      "- Expedition numbers follow the Indian Scientific Expedition to Antarctica series; the Expedition Logs screen holds the full list.",
+    ].join("\n"),
+  },
+];
 
 /** Deterministic rule engine used when no Groq key is configured. */
 function localAnswer(question: string, context: string): string {
@@ -142,6 +228,16 @@ function localAnswer(question: string, context: string): string {
       "- Escalation: resolve only after two consecutive in-band readings for the breached channel.",
     ].join("\n");
   }
+  const reference = REFERENCE.find((entry) =>
+    entry.terms.some((term) => q.includes(term)),
+  );
+  if (reference) {
+    return [
+      "Reference answer - no model key is configured, so this comes from the built-in polar reference set rather than a live model.",
+      reference.answer,
+      "- Set the GROQ_API_KEY credential to answer open questions with llama-3.3-70b-versatile.",
+    ].join("\n");
+  }
   if (q.includes("water") || q.includes("pipeline") || q.includes("freeze") || q.includes("intake")) {
     return [
       "Assessment: water-path integrity is the highest-consequence thermal dependency at both stations.",
@@ -152,12 +248,12 @@ function localAnswer(question: string, context: string): string {
     ].join("\n");
   }
   return [
-    "Assessment: answering from the local rule engine over live station context.",
+    "Assessment: no model key is configured, so I am answering from the local rule engine over live station context.",
     `- ${critical} critical and ${warning} warning incidents are open in the current sample.`,
     riskLine ? `- ${riskLine}` : "- Continuity engine has no active prediction for this station.",
     windLine ? `- ${windLine}` : "- Local weather sample is not yet available.",
-    "- Ask about blackout risk, power and microgrid, weather limits, alerts, or the water path for a focused answer.",
-    "- Set the GROQ_API_KEY credential to route this question to llama-3.3-70b-versatile with the same context.",
+    "- Station topics I can answer offline: blackout risk, power and microgrid, weather limits, alerts, the water path, ice, the Antarctic Treaty, TMR and self-healing, generator maintenance, NPDC metadata and the console's own screens.",
+    "- For open general questions, set the GROQ_API_KEY credential to route them to llama-3.3-70b-versatile with this same live context.",
   ].join("\n");
 }
 
@@ -202,8 +298,8 @@ export const ask = action({
         body: JSON.stringify({
           model: GROQ_MODEL,
           messages,
-          temperature: 0.25,
-          max_tokens: 700,
+          temperature: 0.3,
+          max_tokens: 900,
         }),
       });
       if (!res.ok) {

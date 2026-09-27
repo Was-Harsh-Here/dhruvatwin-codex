@@ -287,6 +287,71 @@ const schema = defineSchema(
       generatedAt: v.number(),
       generatedBy: v.optional(v.string()),
     }).index("by_station_time", ["stationSlug", "generatedAt"]),
+
+    /**
+     * Cascade drills. Each run stores the trigger, the isolation plan and the
+     * full downstream propagation, so a drill can be replayed and compared.
+     */
+    cascadeRuns: defineTable({
+      stationSlug: v.string(),
+      triggerId: v.string(),
+      triggerLabel: v.string(),
+      severity: v.string(),
+      impacted: v.number(),
+      isolated: v.number(),
+      minutesBought: v.number(),
+      resilience: v.number(),
+      crewRiskNode: v.optional(v.string()),
+      recommendation: v.string(),
+      impacts: v.array(
+        v.object({
+          id: v.string(),
+          label: v.string(),
+          timeToImpactSec: v.number(),
+          probability: v.number(),
+          severity: v.string(),
+          state: v.string(),
+        }),
+      ),
+      runBy: v.string(),
+      timestamp: v.number(),
+    })
+      .index("by_time", ["timestamp"])
+      .index("by_station_time", ["stationSlug", "timestamp"]),
+
+    /** One row per completed telemetry repair procedure. */
+    repairLog: defineTable({
+      stationSlug: v.string(),
+      equipmentId: v.string(),
+      sensorId: v.string(),
+      parameter: v.string(),
+      cause: v.string(),
+      procedure: v.string(),
+      steps: v.array(v.string()),
+      readingBefore: v.string(),
+      clearedAlerts: v.number(),
+      repairedBy: v.string(),
+      timestamp: v.number(),
+    }).index("by_station_time", ["stationSlug", "timestamp"]),
+
+    /** FPGA self-healing and telemetry-integrity self-test results. */
+    selfTests: defineTable({
+      stationSlug: v.string(),
+      suite: v.string(),
+      trials: v.number(),
+      corrected: v.number(),
+      correctedTmr: v.number(),
+      correctedScrub: v.number(),
+      correctedDouble: v.number(),
+      detectedUncorrectable: v.number(),
+      undetected: v.number(),
+      scrubs: v.number(),
+      meanScrubMs: v.number(),
+      pass: v.boolean(),
+      notes: v.string(),
+      runBy: v.string(),
+      timestamp: v.number(),
+    }).index("by_station_time", ["stationSlug", "timestamp"]),
   },
   {
     schemaValidation: false,

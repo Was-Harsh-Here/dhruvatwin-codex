@@ -51,6 +51,8 @@ export interface StationLink {
     payload: unknown,
   ) => Promise<void>;
   clear: () => Promise<void>;
+  /** Re-attempt the outbox now instead of waiting for the next reconnect. */
+  flush: () => Promise<void>;
 }
 
 /**
@@ -257,6 +259,15 @@ export function useStationLink(slug: string, channels: LinkChannel[]): StationLi
     await refreshStats();
   }, [refreshStats]);
 
+  /**
+   * Manual flush. The queue also drains on reconnect and after every send, but
+   * an operator watching a weak pass wants to force the attempt themselves.
+   */
+  const flush = useCallback(async () => {
+    await drain();
+    await refreshStats();
+  }, [drain, refreshStats]);
+
   return useMemo(
     () => ({
       status,
@@ -271,6 +282,7 @@ export function useStationLink(slug: string, channels: LinkChannel[]): StationLi
       messages,
       send,
       clear,
+      flush,
     }),
     [
       status,
@@ -284,6 +296,7 @@ export function useStationLink(slug: string, channels: LinkChannel[]): StationLi
       messages,
       send,
       clear,
+      flush,
     ],
   );
 }

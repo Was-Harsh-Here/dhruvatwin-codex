@@ -17,16 +17,20 @@ import {
   ClipboardList,
   Cpu,
   FileCheck2,
+  GitBranchPlus,
   Globe2,
   Layers,
   PenSquare,
   Radio,
+  Ship,
   Shield,
   Snowflake,
   Thermometer,
   Truck,
   Users,
+  Video,
   Wind,
+  Wrench,
 } from "lucide-react";
 import { Link } from "react-router";
 
@@ -221,6 +225,26 @@ export default function Landing() {
                 icon: Layers,
                 title: "Seven view modes",
                 body: "Exterior, X-Ray, Infrared, Thermal, MEP/HVAC, Structural and Night, plus a 2.5D isometric cutaway with rooms, occupancy and data overlays.",
+              },
+              {
+                icon: Video,
+                title: "Free camera and drone tour",
+                body: "Presets fly the camera once and then release it, so dragging, panning and zooming stay where you leave them. A narrated drone tour flies ten scripted stops over each station, with a survey grid, range rings and layer switches for decluttering.",
+              },
+              {
+                icon: GitBranchPlus,
+                title: "Cascade failure drill",
+                body: "Propagate one equipment failure through the real station dependency graph, apply your isolation plan and watch the response window, crew-risk node and resilience index recompute before recording the drill.",
+              },
+              {
+                icon: Wrench,
+                title: "Repair bay and self-healing",
+                body: "A live fault queue with the field procedure for each channel, repairs that return the plant to band and clear its incidents, and a real FPGA self-healing self-test over a triple-redundant bitstream with a scrub interval verdict.",
+              },
+              {
+                icon: Ship,
+                title: "Resupply voyage tracker",
+                body: "The sea lift from Cape Town to Bharati or Maitri: live position, noon reports, cargo and sea state on a chart drawn by the twin, with Google Maps satellite view and Google Earth links one click away.",
               },
               {
                 icon: Cpu,

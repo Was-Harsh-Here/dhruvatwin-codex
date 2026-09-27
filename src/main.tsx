@@ -29,6 +29,9 @@ const Compliance = lazy(() => import("./pages/Compliance.tsx"));
 const Expeditions = lazy(() => import("./pages/Expeditions.tsx"));
 const Audit = lazy(() => import("./pages/Audit.tsx"));
 const AntarcticMode = lazy(() => import("./pages/AntarcticMode.tsx"));
+const Cascade = lazy(() => import("./pages/Cascade.tsx"));
+const Repair = lazy(() => import("./pages/Repair.tsx"));
+const Resupply = lazy(() => import("./pages/Resupply.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -321,6 +324,39 @@ createRoot(document.getElementById("root")!).render(
                     description="The high-contrast field interface and SOS channel require a station account."
                   >
                     <AntarcticMode />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/cascade"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the cascade drill"
+                    description="Failure propagation drills over the station dependency graph are available to signed-in operators."
+                  >
+                    <Cascade />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/repair"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the repair bay"
+                    description="Telemetry repair procedures and the FPGA self-healing self-test require an account."
+                  >
+                    <Repair />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/resupply"
+                element={
+                  <RequireAuth
+                    title="Sign in to track the resupply voyage"
+                    description="The sea lift from Cape Town and its cargo state are available to signed-in operators."
+                  >
+                    <Resupply />
                   </RequireAuth>
                 }
               />

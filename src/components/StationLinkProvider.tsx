@@ -23,6 +23,7 @@ const IDLE_LINK: StationLink = {
   messages: [],
   send: async () => {},
   clear: async () => {},
+  flush: async () => {},
 };
 
 const StationLinkContext = createContext<StationLink>(IDLE_LINK);

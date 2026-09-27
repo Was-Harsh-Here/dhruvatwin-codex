@@ -3,6 +3,14 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useBlackout } from "@/hooks/use-blackout";
 import { useRoleView } from "@/hooks/use-role-view";
@@ -12,6 +20,7 @@ import { AssistantDock } from "@/components/AssistantDock";
 import {
   PROJECT_IDENTITY,
   INSTRUMENTED_STATIONS,
+  formatAge,
   formatUtc,
   stationFromParams,
   type StationSlug,
@@ -20,6 +29,11 @@ import { ROLE_VIEWS } from "@/lib/roles";
 import {
   Activity,
   AlertTriangle,
+  GitBranchPlus,
+  RefreshCw,
+  Ship,
+  Trash2,
+  Wrench,
   Box,
   BookOpen,
   ClipboardList,
@@ -66,6 +80,14 @@ const NAV_SECTIONS: Array<{
       { to: "/antarctica", label: "Antarctica Overview", icon: Globe2 },
       { to: "/weather", label: "Weather Extension", icon: Wind },
       { to: "/antarctic", label: "Antarctic Mode", icon: Snowflake },
+    ],
+  },
+  {
+    title: "Resilience & Logistics",
+    items: [
+      { to: "/cascade", label: "Cascade Drill", icon: GitBranchPlus },
+      { to: "/repair", label: "Repair Bay", icon: Wrench },
+      { to: "/resupply", label: "Resupply Voyage", icon: Ship },
     ],
   },
   {
@@ -134,26 +156,134 @@ function ContinuityWidget({ slug }: { slug: string }) {
   );
 }
 
-/** Offline queue and broker state indicator. */
+/**
+ * Offline queue and broker control.
+ *
+ * The badge is a live readout, and the panel behind it is the control surface:
+ * broker state, queue depth by priority class, how long the oldest item has
+ * been waiting, a manual flush and the recent frame feed. Field traffic is
+ * written to IndexedDB before any network attempt, so a queue that survives a
+ * reload is normal, not an error state.
+ */
 function SyncIndicator() {
   const link = useStationLinkContext();
   const connected = link.status === "connected";
+  const [busy, setBusy] = useState(false);
+
+  const runFlush = async () => {
+    setBusy(true);
+    try {
+      await link.flush();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <Badge
-      variant="outline"
-      className={cn(
-        "hidden text-[10px] md:inline-flex",
-        connected
-          ? "border-[#3EE07F]/40 text-[#3EE07F]"
-          : link.online
-            ? "border-[#FFB020]/40 text-[#FFB020]"
-            : "border-[#FF3B47]/40 text-[#FF3B47]",
-      )}
-      title={`MQTT broker ${link.broker} - ${link.published} frames published, ${link.pending} queued`}
-    >
-      <Radio className="mr-1 size-3" />
-      {connected ? "ONLINE" : link.online ? "SYNCING" : "OFFLINE"} - {link.pending} queued
-    </Badge>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "hidden items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-medium transition-colors md:inline-flex",
+            connected
+              ? "border-[#3EE07F]/40 text-[#3EE07F] hover:bg-[#3EE07F]/10"
+              : link.online
+                ? "border-[#FFB020]/40 text-[#FFB020] hover:bg-[#FFB020]/10"
+                : "border-[#FF3B47]/40 text-[#FF3B47] hover:bg-[#FF3B47]/10",
+          )}
+          title={`MQTT broker ${link.broker} - ${link.published} frames published, ${link.pending} queued`}
+        >
+          <Radio className="size-3" />
+          {connected ? "ONLINE" : link.online ? "SYNCING" : "OFFLINE"} - {link.pending} queued
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          Offline sync and MQTT
+        </DropdownMenuLabel>
+        <div className="space-y-2 px-2 pb-2 text-[11px]">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Broker</span>
+            <span className="cc-mono text-foreground">{link.broker}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Link state</span>
+            <span className="cc-mono text-foreground">
+              {connected ? "connected" : link.online ? "reconnecting" : "offline"}
+              {link.detail ? ` - ${link.detail.slice(0, 40)}` : ""}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Frames published</span>
+            <span className="cc-mono text-foreground">{link.published}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Oldest queued</span>
+            <span className="cc-mono text-foreground">
+              {link.oldestAt ? formatAge(link.oldestAt) : "nothing waiting"}
+            </span>
+          </div>
+          <div>
+            <div className="cc-label text-[9px]">Queue by priority</div>
+            <div className="mt-1 grid grid-cols-4 gap-1.5">
+              {[1, 2, 3, 4].map((priority) => (
+                <div key={priority} className="rounded border border-border px-1.5 py-1 text-center">
+                  <div className="cc-mono text-xs text-foreground">
+                    {link.byPriority[priority] ?? 0}
+                  </div>
+                  <div className="text-[9px] text-muted-foreground">
+                    {priority === 1
+                      ? "SOS"
+                      : priority === 2
+                        ? "Critical"
+                        : priority === 3
+                          ? "Check-in"
+                          : "Routine"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => void runFlush()} disabled={busy}>
+          <RefreshCw className="mr-2 size-3" />
+          <span className="text-xs">{busy ? "Flushing queue" : "Flush queue now"}</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void link.clear()}>
+          <Trash2 className="mr-2 size-3" />
+          <span className="text-xs">Clear the outbox</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          Recent frames
+        </DropdownMenuLabel>
+        <div className="max-h-40 space-y-1 overflow-y-auto px-2 pb-2">
+          {link.messages.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground">
+              No frames yet. Live telemetry publishes every five seconds once the link is up.
+            </p>
+          ) : (
+            link.messages.slice(0, 6).map((message) => (
+              <div key={message.id} className="rounded border border-border px-2 py-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "cc-mono text-[9px]",
+                      message.direction === "out" ? "text-[#00E0C6]" : "text-[#4A9EFF]",
+                    )}
+                  >
+                    {message.direction === "out" ? "TX" : "RX"}
+                  </span>
+                  <span className="cc-mono truncate text-[9px] text-foreground">{message.topic}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

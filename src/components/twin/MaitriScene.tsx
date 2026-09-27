@@ -8,6 +8,7 @@ import {
   Hotspot,
   Lighting,
   MAT,
+  SiteSurvey,
   Snowfall,
   Stars,
   TelemetryStrip,
@@ -514,17 +515,16 @@ export function MaitriScene({
   onEnterBuilding,
 }: TwinSceneProps) {
   const lake = WATER_BODIES.priyadarshini;
+  const rises = [
+    { x: -240, z: -220, r: 260, h: 9 },
+    { x: 230, z: -260, r: 210, h: 6 },
+    { x: -120, z: 300, r: 180, h: 4 },
+    { x: 300, z: 240, r: 170, h: 5 },
+  ];
   return (
     <group>
-      <Terrain
-        size={800}
-        rises={[
-          { x: -240, z: -220, r: 260, h: 9 },
-          { x: 230, z: -260, r: 210, h: 6 },
-          { x: -120, z: 300, r: 180, h: 4 },
-          { x: 300, z: 240, r: 170, h: 5 },
-        ]}
-      />
+      <Terrain size={800} rises={rises} />
+      <SiteSurvey size={400} rings={[25, 50, 100, 200]} rises={rises} />
       <Lighting
         {...modeLighting(viewMode)}
         sunPosition={sun?.position ?? [120, 140, 60]}

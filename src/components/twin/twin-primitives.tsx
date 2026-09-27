@@ -3,8 +3,8 @@ import { ContactShadows, OrbitControls } from "@react-three/drei";
 import type { SensorSummary } from "./types";
 
 export type { SensorSummary, TwinHotspotDef, TwinSceneProps } from "./types";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as THREE from "three";
 
 /* ------------------------------------------------------------------ */
@@ -206,6 +206,61 @@ export function Snowfall({ count = 1200, spread = 220 }: { count?: number; sprea
 }
 
 /* ------------------------------------------------------------------ */
+/* Display layers                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Layer switches for the twin scenes.
+ *
+ * Labels, hotspot markers and the survey grid are drawn inside the WebGL
+ * scene, so switching them from the console must not rebuild the scene graph.
+ * The switches therefore live in a small module-level store that every layer
+ * subscribes to with useSyncExternalStore.
+ */
+export interface TwinDisplayState {
+  /** Floating in-canvas labels (telemetry strips, room and object labels). */
+  labels: boolean;
+  /** Survey grid: graticule, range rings, contour rings and the north rose. */
+  survey: boolean;
+  /** Clickable hotspot markers scattered across the site. */
+  hotspots: boolean;
+}
+
+let displayState: TwinDisplayState = { labels: true, survey: true, hotspots: true };
+const displayListeners = new Set<() => void>();
+
+/** Read the current layer switches without subscribing. */
+export function getTwinDisplay(): TwinDisplayState {
+  return displayState;
+}
+
+/** Update one or more layer switches. */
+export function setTwinDisplay(patch: Partial<TwinDisplayState>): void {
+  const next = { ...displayState, ...patch };
+  if (
+    next.labels === displayState.labels &&
+    next.survey === displayState.survey &&
+    next.hotspots === displayState.hotspots
+  ) {
+    return;
+  }
+  displayState = next;
+  for (const listener of displayListeners) listener();
+}
+
+/** Subscribe to the layer switches for use in components. */
+export function useTwinDisplay(): TwinDisplayState {
+  return useSyncExternalStore(
+    (listener) => {
+      displayListeners.add(listener);
+      return () => displayListeners.delete(listener);
+    },
+    getTwinDisplay,
+    getTwinDisplay,
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Hotspots                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -222,12 +277,14 @@ export function Hotspot({
   active?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
+  const display = useTwinDisplay();
   const ref = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
     if (ref.current) {
       ref.current.position.y = position[1] + Math.sin(clock.elapsedTime * 2) * 0.25;
     }
   });
+  if (!display.hotspots) return null;
   return (
     <group
       ref={ref}
@@ -265,6 +322,184 @@ export function Hotspot({
           side={THREE.DoubleSide}
         />
       </mesh>
+    </group>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Survey layer                                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Cartographic layer for the station site.
+ *
+ * Draws the detail the twin is read with operationally: a 20 m graticule over
+ * the apron, range rings at 25/50/100/200 m with distance labels, contour
+ * rings around every raised sector and a north rose. Everything is line or
+ * flat geometry, so it costs almost nothing, and the layer obeys the console's
+ * survey and label switches.
+ */
+export function SiteSurvey({
+  size = 400,
+  spacing = 20,
+  rings = [25, 50, 100, 200],
+  rises = [],
+  y = 0.09,
+}: {
+  size?: number;
+  spacing?: number;
+  rings?: number[];
+  rises?: Array<{ x: number; z: number; r: number; h: number }>;
+  y?: number;
+}) {
+  const display = useTwinDisplay();
+
+  const grid = useMemo(() => {
+    const minor: number[] = [];
+    const major: number[] = [];
+    const half = size / 2;
+    for (let v = -half; v <= half; v += spacing) {
+      const bucket = Math.round(v) % 100 === 0 ? major : minor;
+      bucket.push(-half, y, v, half, y, v);
+      bucket.push(v, y, -half, v, y, half);
+    }
+    const build = (verts: number[]) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+      return geo;
+    };
+    return { minor: build(minor), major: build(major) };
+  }, [size, spacing, y]);
+
+  const contours = useMemo(() => {
+    const out: Array<{ key: string; x: number; z: number; radius: number; opacity: number }> = [];
+    rises.forEach((rise, index) => {
+      for (const fraction of [1, 0.78, 0.55, 0.32]) {
+        out.push({
+          key: `${index}-${fraction}`,
+          x: rise.x,
+          z: rise.z,
+          radius: rise.r * fraction,
+          opacity: 0.1 + (1 - fraction) * 0.2,
+        });
+      }
+    });
+    return out;
+  }, [rises]);
+
+  if (!display.survey) return null;
+
+  return (
+    <group>
+      <lineSegments geometry={grid.minor}>
+        <lineBasicMaterial color="#5C87A5" transparent opacity={0.16} />
+      </lineSegments>
+      <lineSegments geometry={grid.major}>
+        <lineBasicMaterial color="#5C87A5" transparent opacity={0.34} />
+      </lineSegments>
+
+      {/* Range rings from the station datum. */}
+      {rings.map((radius) => (
+        <mesh
+          key={`ring-${radius}`}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, y + 0.01, 0]}
+        >
+          <ringGeometry args={[radius - 0.28, radius + 0.28, 112]} />
+          <meshBasicMaterial
+            color={TWIN_COLORS.cyan}
+            transparent
+            opacity={radius >= 100 ? 0.34 : 0.24}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      ))}
+
+      {/* Contour rings around the raised sectors. */}
+      {contours.map((contour) => (
+        <mesh
+          key={`contour-${contour.key}`}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[contour.x, y + 0.02, contour.z]}
+        >
+          <ringGeometry args={[contour.radius - 0.5, contour.radius + 0.5, 96]} />
+          <meshBasicMaterial
+            color="#A8C6D8"
+            transparent
+            opacity={contour.opacity}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      ))}
+
+      {/* North rose with cardinal ticks. */}
+      <group position={[0, y + 0.03, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[13.2, 14, 96]} />
+          <meshBasicMaterial
+            color="#8FB8CC"
+            transparent
+            opacity={0.34}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+        {Array.from({ length: 16 }, (_, i) => {
+          const angle = (i / 16) * Math.PI * 2;
+          const long = i % 4 === 0;
+          const inner = long ? 13.2 : 13.7;
+          return (
+            <mesh
+              key={`tick-${i}`}
+              rotation={[-Math.PI / 2, 0, -angle]}
+              position={[
+                Math.cos(angle) * ((inner + 14) / 2),
+                0,
+                Math.sin(angle) * ((inner + 14) / 2),
+              ]}
+            >
+              <planeGeometry args={[long ? 1.5 : 0.8, 0.26]} />
+              <meshBasicMaterial color="#8FB8CC" transparent opacity={0.5} />
+            </mesh>
+          );
+        })}
+      </group>
+
+      {/* Distance and cardinal labels, hidden with the label layer. */}
+      {rings
+        .filter((radius) => radius >= 100)
+        .map((radius) => (
+          <Label3D
+            key={`ring-label-${radius}`}
+            position={[radius * 0.7, 1.7, -radius * 0.7]}
+            px={0.12}
+            border="#123A52"
+            rows={[{ text: `${radius} m radius`, color: "#9FD5E8" }]}
+          />
+        ))}
+      <Label3D
+        position={[0, 2.2, -16.5]}
+        px={0.13}
+        border="#123A52"
+        rows={[{ text: "N", color: "#9FD5E8" }]}
+      />
+      <Label3D
+        position={[16.5, 2.2, 0]}
+        px={0.13}
+        border="#123A52"
+        rows={[{ text: "E", color: "#9FD5E8" }]}
+      />
+      <Label3D
+        position={[0, 2.2, 16.5]}
+        px={0.13}
+        border="#123A52"
+        rows={[{ text: "S", color: "#9FD5E8" }]}
+      />
+      <Label3D
+        position={[-16.5, 2.2, 0]}
+        px={0.13}
+        border="#123A52"
+        rows={[{ text: "W", color: "#9FD5E8" }]}
+      />
     </group>
   );
 }
@@ -439,24 +674,88 @@ export interface CameraPreset {
   target: [number, number, number];
 }
 
-/** Smoothly move the orbit camera toward the active preset. */
+/** In-flight preset flight. */
+interface CameraFlight {
+  from: THREE.Vector3;
+  fromTarget: THREE.Vector3;
+  to: THREE.Vector3;
+  toTarget: THREE.Vector3;
+  started: number;
+  duration: number;
+}
+
+/**
+ * Orbit camera with one-shot preset flights.
+ *
+ * Selecting a camera preset starts a timed flight and then RELEASES the
+ * camera: once the flight ends nothing writes to the camera again, so a drag,
+ * pan or zoom stays exactly where the operator left it. Any manual input
+ * cancels a flight in progress, and `flyKey` lets the console re-fly the
+ * current preset on demand. Free view is the default state of the rig.
+ */
 export function CameraRig({
   preset,
   presets,
+  flyKey = 0,
+  minDistance = 8,
+  maxDistance = 480,
+  enabled = true,
 }: {
   preset: string;
   presets: CameraPreset[];
+  /** Bump to re-fly the same preset after the operator has moved the camera. */
+  flyKey?: number;
+  minDistance?: number;
+  maxDistance?: number;
+  /** Set false while another controller (drone tour) owns the camera. */
+  enabled?: boolean;
 }) {
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
+  const camera = useThree((state) => state.camera);
   const target = presets.find((p) => p.id === preset) ?? presets[0];
+  const targetRef = useRef(target);
+  targetRef.current = target;
+  const flight = useRef<CameraFlight | null>(null);
+  /** Identity of the requested pose: a new pose re-flies, a re-render does not. */
+  const pose = target ? `${target.position.join(":")}@${target.target.join(":")}` : "";
 
-  useFrame((state, delta) => {
+  useEffect(() => {
     const controls = controlsRef.current;
-    if (!controls) return;
-    const cam = state.camera;
-    const k = 1 - Math.pow(0.001, delta); // frame-rate independent lerp
-    cam.position.lerp(new THREE.Vector3(...target.position), k);
-    controls.target.lerp(new THREE.Vector3(...target.target), k);
+    const to = targetRef.current;
+    if (!controls || !to) return;
+    const goal = new THREE.Vector3(...to.position);
+    flight.current = {
+      from: camera.position.clone(),
+      fromTarget: controls.target.clone(),
+      to: goal,
+      toTarget: new THREE.Vector3(...to.target),
+      started: performance.now(),
+      duration: THREE.MathUtils.clamp(
+        0.5 + camera.position.distanceTo(goal) / 380,
+        0.7,
+        1.7,
+      ),
+    };
+    // `pose` and `flyKey` are the flight triggers; the vectors are read above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset, flyKey, pose, camera, enabled]);
+
+  useFrame(() => {
+    const controls = controlsRef.current;
+    const active = flight.current;
+    if (!controls || !active) return;
+    const t = (performance.now() - active.started) / (active.duration * 1000);
+    if (t >= 1) {
+      camera.position.copy(active.to);
+      controls.target.copy(active.toTarget);
+      controls.update();
+      flight.current = null;
+      return;
+    }
+    // Ease-in-out cubic so the arrival is smooth and the flight reads as a move.
+    const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    camera.position.lerpVectors(active.from, active.to, e);
+    controls.target.lerpVectors(active.fromTarget, active.toTarget, e);
     controls.update();
   });
 
@@ -464,11 +763,18 @@ export function CameraRig({
     <OrbitControls
       ref={controlsRef}
       makeDefault
+      enabled={enabled}
       enableDamping
       dampingFactor={0.08}
-      minDistance={20}
-      maxDistance={420}
-      maxPolarAngle={Math.PI / 2.05}
+      enablePan
+      screenSpacePanning
+      minDistance={minDistance}
+      maxDistance={maxDistance}
+      maxPolarAngle={Math.PI / 2.02}
+      // A manual drag, pan or wheel always wins over an in-flight preset.
+      onStart={() => {
+        flight.current = null;
+      }}
     />
   );
 }
@@ -567,7 +873,8 @@ function labelTexture(rows: LabelRow[], border: string) {
 /**
  * Camera-facing label rendered entirely inside the 3D scene.
  * `px` is the world size of one texture pixel, which sets how large the label
- * reads at a given camera distance.
+ * reads at a given camera distance. Labels honour the console's layer switch,
+ * so the whole world can be decluttered without rebuilding the scene.
  */
 export function Label3D({
   position,
@@ -582,6 +889,7 @@ export function Label3D({
   px?: number;
   renderOrder?: number;
 }) {
+  const display = useTwinDisplay();
   const key = rows.map((row) => `${row.text}:${row.color ?? ""}`).join("|");
   const { texture, width, height } = useMemo(
     () => labelTexture(rows, border),
@@ -591,6 +899,8 @@ export function Label3D({
   );
 
   useEffect(() => () => texture.dispose(), [texture]);
+
+  if (!display.labels) return null;
 
   return (
     <sprite

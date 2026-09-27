@@ -70,6 +70,14 @@ Applied to both twins through scene-graph material overrides so every mode works
 6. **Structural** - load-bearing structure only
 7. **Night** - emissive elements only, for a polar night inspection walk
 
+### Free camera, drone tour and map detail
+
+- **Free camera by default.** A camera preset flies the camera once, over about a second, and then releases it completely. Nothing writes to the camera while the operator works, so a drag, pan or zoom stays exactly where it is left. Manual input cancels an in-flight preset, and any preset can be re-flown from the Camera menu (including **Reset to overview**). Drag orbits, right-drag pans, scroll zooms, closer and further than before.
+- **Drone tour mode.** A scripted flight over each station with ten narrated stops: the site, the station structure, power, water, fuel, weather, field support, interiors and the water features. The panel carries the written briefing, the facts behind the stop, dwell progress, pause, previous, next, restart and half, normal or double speed; taking control hands the camera straight back to free view.
+- **Survey layer.** A 20 m graticule with bold 100 m lines, 25/50/100/200 m range rings with distance labels, contour rings around each raised sector and a north rose, all switchable. Layer switches for labels, survey and hotspots live in the Layers menu and apply to the live scene without rebuilding it.
+- **Detailed station plot.** The mini-map graticule is drawn to scale with range rings, a north arrow, a 50 m scale bar, labelled water bodies and every plotted structure. Clicking a block opens its hotspot and flies the matching viewpoint; clicking a lake opens its water panel.
+- **Decluttered viewport.** Seven view modes, the camera presets and the layer switches live in three compact menus instead of open columns, the legend and context line share one block, and labels, survey and hotspot markers can each be turned off independently.
+
 ### Navigation and time
 
 - **Orbit mode** outside, **walk mode** inside: WASD, mouse look with pointer lock, Shift to sprint, Space to jump, Esc to release the pointer.
@@ -106,9 +114,39 @@ A separate interface, not a theme. Pure black background, pure white text, 4 pix
 - IndexedDB outbox with priority classes **SOS 1, Critical 2, Check-in 3, Routine 4**, replayed highest-priority-first when the link returns
 - A sync indicator in the top bar reports broker state, online/offline and the pending count
 
-### Command screens (16)
+### Cascade drill (failure propagation)
 
-Sensor Dashboard, Alert Triage and Incident Matrix, Station Dashboard with personnel roster, Microgrid and CHP Command, Local Environment with the ice velocity map, Digital Twin 3D, Antarctica Overview, Weather Extension, Antarctic Mode, NCPOR Library, NPDC Compliance Centre, Expedition Logs, Audit Trail, Equipment Catalog, Workspace and Admin Console.
+One equipment trigger propagates through the station's real dependency graph, and the operator's isolation plan changes the outcome rather than the wording around it.
+
+- Each station has its own graph: Maitri runs from the fuel farm through four 62.5 kVA generators, the PDU, the critical bus, the thermal plant, the heated lake pipeline, the habitat envelope, VSAT, the AWS and detection; Bharati runs from 13 fuel tanks through three CHP units, the distribution grid, the emergency bus, the thermal loop, the 450 m seawater intake, the desalination and wastewater plants, the container envelope, the laboratory and detection.
+- Nodes carry redundancy (none, N+1, dual), a consequence weight and a real isolation time. Redundancy attenuates propagation; isolation stops it.
+- The screen draws the graph by tier, colours every node by state, highlights the propagation path, and lists the timeline with time to impact, probability, path and the isolation procedure for each node.
+- Outputs: nodes reached, response window in minutes, crew-risk node, resilience index, and a recommendation naming the node to protect first.
+- Every drill is stored with the full propagation and appended to the audit chain, and a drill at warning or above raises the crew-risk node as a real incident in triage.
+
+### Repair bay and FPGA self-healing
+
+**Telemetry repair.** The fault queue is derived from the live channels: out of band, dropped (no sample inside the window), drifting toward a warn limit, or flagged by signal quality. Each fault carries the field procedure written out step by step. Applying a repair closes the matching incidents, writes a corrected sample back inside the operating band so the plant really does report nominal again, records the work in the repair log and appends an entry to the hash-chained audit log.
+
+**FPGA self-healing verification.** A real simulation, not a progress bar: it builds a 256 frame bitstream held in triple modular redundancy, injects single-event upsets into individual copies, runs the bitwise majority voter, runs the scrubber and re-verifies every frame against its own CRC signature.
+
+- Verdicts: **PASS** only when no single-bit upset reaches the logic and no corruption slips past the CRC. Two upsets in one copy are physically unrepairable by voting and are reported as detected-uncorrectable rather than hidden.
+- Reported: trials, corrected by vote, corrected by scrub, frames rewritten, double-bit events repaired, detected-uncorrectable, undetected, mean and worst scrub time, plus the per-trial table.
+- A **scrub interval planner** computes the upsets expected between passes, the double-bit risk and the recommended maximum scrub interval, then passes or fails the configured interval against it.
+- Verdicts can be recorded to the station record and the audit chain.
+
+### Resupply voyage tracker (Google Maps and Google Earth)
+
+- Three modelled voyages: the Cape Town to Bharati relief, the Cape Town to Maitri relief and the inter-station Bharati to Maitri leg, from real route geometry with waypoints, notes and discharge plans.
+- Live position, course and compass, distance run and remaining in nautical miles and kilometres, day of voyage, schedule margin, ice state against the plotted ice edge, planned arrival and passage progress, all computed from the route, the speed and the time.
+- Noon reports with position, distance run, average speed, wind, swell and air temperature, with the ice-edge crossing marked.
+- Cargo manifest and vessel particulars for the modelled charter vessel.
+- **Google Maps** satellite embed centred on the ship or any waypoint, **Google Earth** deep link, and route links to the destination station. The embed is keyless, so the tracker works with no configuration; adding `VITE_GOOGLE_MAPS_API_KEY` upgrades it to the Maps JavaScript API.
+- A built-in route chart drawn by the twin from the same geometry used for the position, so the ship marker cannot drift away from the numbers. Ice edge, graticule, waypoints, port and destination are all plotted and clickable.
+
+### Command screens (19)
+
+Sensor Dashboard, Alert Triage and Incident Matrix, Station Dashboard with personnel roster, Microgrid and CHP Command, Local Environment with the ice velocity map, Digital Twin 3D, Antarctica Overview, Weather Extension, Antarctic Mode, Cascade Drill, Repair Bay, Resupply Voyage, NCPOR Library, NPDC Compliance Centre, Expedition Logs, Audit Trail, Equipment Catalog, Workspace and Admin Console.
 
 ### Weather extension
 
@@ -116,7 +154,11 @@ Open-Meteo (no API key) provides hourly temperature, wind, surface pressure and 
 
 ### Station assistant
 
-A Groq-powered assistant using `llama-3.3-70b-versatile`, with live station context injected on every request: telemetry channels, open incidents, continuity prediction, microgrid state and local weather. Without a Groq key the same context is answered by a deterministic local rule engine so the console stays usable.
+A Groq-powered assistant using `llama-3.3-70b-versatile`, with live station context injected on every request: telemetry channels, open incidents, continuity prediction, microgrid state and local weather.
+
+- **General questions are answered too.** The assistant decides what a question needs: operational questions are grounded in live context and never invent sensor values; general questions (polar science, engineering, history, definitions, writing help) are answered properly from the model's own knowledge; mixed questions get both parts. Station context is supplied, not forced into unrelated answers.
+- **Responsiveness.** Greetings, identity, console how-to and topic help are answered locally in the same tick with no round trip. A server answer types itself out at reading speed instead of painting in one block, the wait shows staged status text, and every answer is stamped with its model and elapsed time. Ctrl/Cmd + K opens the dock, Escape closes it, and the last answer can be copied or the last question retried in one click.
+- **Offline.** Without a Groq key a deterministic rule engine answers over the same live context, backed by a built-in polar reference set covering the Antarctic Treaty, katabatic wind, TMR and single-event upsets, polar water systems, NPDC metadata, generator maintenance, sea ice and the station history.
 
 ### NPDC metadata and roles
 
@@ -141,7 +183,10 @@ A Groq-powered assistant using `llama-3.3-70b-versatile`, with live station cont
 | `ops.ts` | Rosters, microgrid, weather, satellite passes, ice velocity, sixty second ops tick |
 | `records.ts` | Hash-chained audit log, NCPOR library, expeditions, NPDC exports |
 | `blackout.ts` | Continuity prediction, blackout simulation and reconciliation |
-| `assistant.ts` | Groq station assistant with live context injection |
+| `cascadeGraph.ts` | Pure dependency model and deterministic propagation engine, shared by the server and the console |
+| `cascade.ts` | Cascade drill execution, persistence and audit logging |
+| `repairs.ts` | Telemetry repair procedures, repair log, FPGA self-test recording |
+| `assistant.ts` | Groq station assistant with live context injection and general knowledge |
 | `seed.ts` | Idempotent seeding of stations, telemetry, rosters, plant history, passes, library, expeditions and the audit chain |
 | `crons.ts` | Ten second sensor tick and sixty second operations tick |
 
@@ -160,9 +205,10 @@ The platform seeds itself: opening the dashboard runs `bootstrap.ensureSeeded` o
 
 | Variable | Purpose |
 | --- | --- |
-| `GROQ_API_KEY` | Enables the station assistant on `llama-3.3-70b-versatile`. Without it the assistant answers from a deterministic local rule engine over the same live context. |
+| `GROQ_API_KEY` | Enables the station assistant on `llama-3.3-70b-versatile`. Without it the assistant answers from a deterministic local rule engine and a built-in polar reference set over the same live context. |
+| `VITE_GOOGLE_MAPS_API_KEY` | Optional. Upgrades the resupply screen from the keyless Google Maps embed to the Maps JavaScript API. |
 
-No key is required for Open-Meteo weather or the public HiveMQ broker.
+No key is required for Open-Meteo weather, the keyless Google Maps and Google Earth links, or the public HiveMQ broker.
 
 ## Demo flow for judges
 
@@ -178,7 +224,12 @@ No key is required for Open-Meteo weather or the public HiveMQ broker.
 10. **Weather Extension** - the Open-Meteo graphs and the 7 day forecast strip.
 11. **NPDC Compliance Centre** - run the gates, export the metadata package, show the audit entry.
 12. **Audit Trail** - show the head digest, verified chain and the export record you just created.
-13. **Role views** - switch between Admin, Commander, Scientist and Station to show navigation and action gating.
+13. **Drone tour** - in the twin, pick Drone Tour and let it narrate two or three stops, then switch to Exterior and drag to show the camera is free.
+14. **Cascade Drill** - trigger the generator hall at critical, run it, then tick the isolation points in the plan and watch the response window and resilience index move before recording the drill.
+15. **Repair Bay** - open a fault, read the procedure, apply it and show the incident closing and the channel returning to band; then run the FPGA self-test and read the PASS verdict and the scrub interval verdict.
+16. **Resupply Voyage** - show the ship mid-passage, the noon reports, the route chart and the Google Maps and Google Earth links.
+17. **Station assistant** - press Ctrl/Cmd + K, ask an operational question, then ask a general one to show it answers both.
+18. **Role views** - switch between Admin, Commander, Scientist and Station to show navigation and action gating.
 
 ## Verification
 

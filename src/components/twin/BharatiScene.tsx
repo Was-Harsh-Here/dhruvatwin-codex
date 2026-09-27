@@ -8,6 +8,7 @@ import {
   Hotspot,
   Lighting,
   MAT,
+  SiteSurvey,
   Snowfall,
   Stars,
   Label3D,
@@ -580,18 +581,16 @@ export function BharatiScene({
   activeVehicle,
   onEnterBuilding,
 }: TwinSceneProps) {
+  const rises = [
+    { x: -240, z: -280, r: 260, h: 11 },
+    { x: 260, z: -210, r: 200, h: 7 },
+    { x: 40, z: -320, r: 170, h: 8 },
+    { x: 320, z: 180, r: 150, h: 5 },
+  ];
   return (
     <group>
-      <Terrain
-        size={900}
-        color="#C7D3DA"
-        rises={[
-          { x: -240, z: -280, r: 260, h: 11 },
-          { x: 260, z: -210, r: 200, h: 7 },
-          { x: 40, z: -320, r: 170, h: 8 },
-          { x: 320, z: 180, r: 150, h: 5 },
-        ]}
-      />
+      <Terrain size={900} color="#C7D3DA" rises={rises} />
+      <SiteSurvey size={420} rings={[25, 50, 100, 200]} rises={rises} />
       <Lighting
         {...modeLighting(viewMode)}
         sunPosition={sun?.position ?? [120, 140, 60]}
