@@ -17,6 +17,7 @@ import { useRoleView } from "@/hooks/use-role-view";
 import { useStationLinkContext } from "@/components/StationLinkProvider";
 import { StationLinkProvider } from "@/components/StationLinkProvider";
 import { AssistantDock } from "@/components/AssistantDock";
+import { award } from "@/lib/achievements";
 import {
   PROJECT_IDENTITY,
   INSTRUMENTED_STATIONS,
@@ -174,6 +175,7 @@ function SyncIndicator() {
     setBusy(true);
     try {
       await link.flush();
+      award("offline");
     } finally {
       setBusy(false);
     }
@@ -540,9 +542,17 @@ function ShellChrome({
             <span className="cc-mono">
               MQTT {link.broker} {link.status} - {link.pending} queued
             </span>
-            <Link to="/" className="ml-auto hover:text-foreground">
-              About the project
-            </Link>
+            <span className="ml-auto flex items-center gap-3">
+              <Link to="/terms" className="transition-colors hover:text-foreground">
+                Terms
+              </Link>
+              <Link to="/privacy" className="transition-colors hover:text-foreground">
+                Privacy
+              </Link>
+              <Link to="/" className="transition-colors hover:text-foreground">
+                About the project
+              </Link>
+            </span>
           </div>
         </footer>
       </div>

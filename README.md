@@ -62,7 +62,7 @@ Thirty-six crew figures walk fixed routes derived from the floor plan - corridor
 
 Both twins carry a living wildlife layer, switchable from the Layers menu and clickable in the scene.
 
-- **Twenty-one species**, each with a real field-guide entry: Adelie, emperor, chinstrap and gentoo penguins; Weddell, crabeater and leopard seals; humpback, minke and killer whales; hourglass dolphins; Antarctic icefish, toothfish, krill, sea spiders and oasis lake invertebrates; snow petrels, south polar skuas, Antarctic petrels, Antarctic terns, cape petrels and Wilson's storm petrels.
+- **Twenty-two species**, each with a real field-guide entry: Adelie, emperor, chinstrap and gentoo penguins; Weddell, crabeater and leopard seals; humpback, minke and killer whales; hourglass dolphins; Antarctic icefish, toothfish, krill, sea spiders and oasis lake invertebrates; snow petrels, south polar skuas, Antarctic petrels, Antarctic terns, cape petrels and Wilson's storm petrels.
 - **Placed honestly.** Bharati sits on the coast, so it carries the marine fauna: three penguin colonies with chicks, seals on the floes, a leopard seal cruising the waterline, whales and dolphins at the ice edge, a krill swarm, fish, seafloor sea spiders and six seabird groups including two nesting ledges. Maitri is 100 km inland, so it gets what genuinely lives on the oasis: flyers riding the ridge line, terns flying in to bathe at the lake margin, storm petrels in the rock crevices and copepods, rotifers and tardigrades in Lake Priyadarshini. Each species card states where it is seen and carries a link to the station where it is modelled.
 - **Interactive models.** Click any group for its species card: Latin name, length, mass, diet, status, four field facts, how many animals are modelled in that scene and a live sighting log read from the `sightings` table. Recording a sighting writes the count, the location and the observer to the station record and appends an audit-chain entry, and the card carries a chip per colony in the scene so switching species is one click.
 - **Cute by design.** The penguins are deliberately pushed towards the appealing end of the proportions - plump bodies, oversized heads, wide-set eyes with a glint, rosy cheeks - and they blink, hop, waddle and look around, with fluffy grey chicks following the adults. The species markings stay correct (Adelie eye ring, emperor neck patch, chinstrap strap, gentoo bonnet), so the models remain identifiable.
@@ -87,6 +87,8 @@ Applied to both twins through scene-graph material overrides so every mode works
 - **Survey layer.** A 20 m graticule with bold 100 m lines, 25/50/100/200 m range rings with distance labels, contour rings around each raised sector and a north rose, all switchable. Layer switches for labels, survey and hotspots live in the Layers menu and apply to the live scene without rebuilding it.
 - **Detailed station plot.** The mini-map graticule is drawn to scale with range rings, a north arrow, a 50 m scale bar, labelled water bodies and every plotted structure. Clicking a block opens its hotspot and flies the matching viewpoint; clicking a lake opens its water panel.
 - **Decluttered viewport.** Seven view modes, the camera presets and the layer switches live in three compact menus instead of open columns, the legend and context line share one block, and labels, survey and hotspot markers can each be turned off independently.
+- **Labels are removable, and off by default where they cluttered the view.** Ambient titles - the green telemetry strip over a station, the amber airlock marker, the neighbouring-station name, room name plates - sit behind a **Place titles and telemetry strips** switch that starts off, so the scene is clean on load and still in walk mode, where nothing floats over anything until the switch is on. Everything else (hover labels, object panels) is one key away: press `L` or the `labels on/off` chip to strip every floating label and put it back, and the interior view has a `Hide labels` button.
+- **Walk the site on foot.** The exterior has a **Walk the site** button as well as orbit: click the canvas for pointer lock, then WASD to walk the apron, Shift to sprint, Space to jump, mouse to look. The hull, fuel farm and summer camp block you out, the fjord and the oasis lake fence you off so nobody walks on water, a boundary keeps a walk on the map, and the amber airlock marker still drops you inside. Distance walked counts towards the field badge.
 
 ### Navigation and time
 
@@ -153,6 +155,18 @@ One equipment trigger propagates through the station's real dependency graph, an
 - Cargo manifest and vessel particulars for the modelled charter vessel.
 - **Google Maps** satellite embed centred on the ship or any waypoint, **Google Earth** deep link, and route links to the destination station. The embed is keyless, so the tracker works with no configuration; adding `VITE_GOOGLE_MAPS_API_KEY` upgrades it to the Maps JavaScript API.
 - A built-in route chart drawn by the twin from the same geometry used for the position, so the ship marker cannot drift away from the numbers. Ice edge, graticule, waypoints, port and destination are all plotted and clickable.
+
+### Field badge (gamification)
+
+The twin keeps a progression layer over everything you do in it, stored in local storage so it survives a reload and works offline.
+
+- **Eighteen badges in four tracks**: Explorer (walk 100 m and 500 m outside, stand in ten and twenty-five rooms, visit both stations, use teleport, step inside), Naturalist (open five species cards, record a sighting, stand with Dev outside, find him at his admin desk), Operator (watch three drone tour stops, open the 2.5D cutaway, open the resupply tracker, flush the offline queue) and Resilience (run a cascade drill, apply a repair, run the FPGA self-test).
+- **Experience, levels and a progress bar** are shown in the Field badge card in the twin's right rail, with the locked badges still stating what they ask for, so the list doubles as a list of things to go and do. Winning a badge raises a toast with its XP.
+- A reset button clears progress for a clean demo.
+
+### Terms and privacy
+
+Two public legal documents, `/terms` and `/privacy`, written against what the platform actually does: what DhruvaTwin is and is not (a prototype with simulated data, not an operational system), acceptable use, the third parties it talks to, what is collected and why, retention, and the rights a user has. They are linked from the landing footer and from every signed-in footer.
 
 ### Command screens (19)
 
@@ -240,8 +254,9 @@ No key is required for Open-Meteo weather, the keyless Google Maps and Google Ea
 15. **Repair Bay** - open a fault, read the procedure, apply it and show the incident closing and the channel returning to band; then run the FPGA self-test and read the PASS verdict and the scrub interval verdict.
 16. **Resupply Voyage** - show the ship mid-passage, the noon reports, the route chart and the Google Maps and Google Earth links.
 17. **Wildlife and the expedition member** - in the twin, click the Adelie colony for its species card, record a sighting, then press **Go to his desk inside** to land in the command room facing Dev Khandhediya at his admin desk, and click the desk to open the same card indoors.
-18. **Station assistant** - press Ctrl/Cmd + K, ask an operational question, then ask a general one to show it answers both.
-19. **Role views** - switch between Admin, Commander, Scientist and Station to show navigation and action gating.
+18. **Walk the site and the field badge** - back outside, press **Walk the site**, click the canvas and walk the apron; then open the Field badge card in the right rail to show the level, the XP bar and the badge just won.
+19. **Station assistant** - press Ctrl/Cmd + K, ask an operational question, then ask a general one to show it answers both.
+20. **Role views** - switch between Admin, Commander, Scientist and Station to show navigation and action gating.
 
 ## Verification
 

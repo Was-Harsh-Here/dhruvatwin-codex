@@ -20,6 +20,7 @@ import {
   type GeoPoint,
 } from "@/lib/voyage";
 import { cn } from "@/lib/utils";
+import { award } from "@/lib/achievements";
 import { Anchor, Compass, ExternalLink, MapPin, Ship, Waves } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -46,6 +47,11 @@ export default function Resupply() {
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  /** Opening the sea lift is a badge: the supply line is watched. */
+  useEffect(() => {
+    award("resupply");
   }, []);
 
   const voyage = VOYAGES.find((candidate) => candidate.id === voyageId) ?? VOYAGES[0];

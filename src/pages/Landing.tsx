@@ -19,6 +19,7 @@ import {
   FileCheck2,
   GitBranchPlus,
   Globe2,
+  Footprints,
   Layers,
   PawPrint,
   PenSquare,
@@ -233,9 +234,14 @@ export default function Landing() {
                 body: "Presets fly the camera once and then release it, so dragging, panning and zooming stay where you leave them. A narrated drone tour flies ten or eleven scripted stops over each station, with a survey grid, range rings and layer switches for decluttering.",
               },
               {
+                icon: Footprints,
+                title: "Walk the site and earn the badge",
+                body: "Leave the orbit camera and walk the apron on foot: WASD, mouse look, sprint and jump, with the hull, the fuel farm and the water edge keeping you honest. Eighteen field badges track what you actually did - distance walked, rooms stood in, species carded, drills run - and the level and XP bar sit in the twin's right rail.",
+              },
+              {
                 icon: PawPrint,
                 title: "Wildlife and the expedition member",
-                body: "Twenty-one species modelled honestly on the ice: four kinds of penguin with fluffy chicks, three seals, three whales, dolphins, terns and petrels, toothfish, krill swarms and seafloor sea spiders. Click any group for its field entry, record a sighting to the station log, or follow Dev Khandhediya from the Ad\u00e9lie colony to his admin desk inside the command room.",
+                body: "Twenty-two species modelled honestly on the ice: four kinds of penguin with fluffy chicks, three seals, three whales, dolphins, terns and petrels, toothfish, krill swarms and seafloor sea spiders. Click any group for its field entry, record a sighting to the station log, or follow Dev Khandhediya from the Ad\u00e9lie colony to his admin desk inside the command room.",
               },
               {
                 icon: GitBranchPlus,
@@ -408,6 +414,14 @@ export default function Landing() {
           <span>PS {PROJECT_IDENTITY.psId}</span>
           <span>{PROJECT_IDENTITY.event}</span>
           <span>{PROJECT_IDENTITY.agency}</span>
+          <nav className="ml-auto flex items-center gap-3">
+            <Link to="/terms" className="transition-colors hover:text-foreground">
+              Terms and Conditions
+            </Link>
+            <Link to="/privacy" className="transition-colors hover:text-foreground">
+              Privacy Policy
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>

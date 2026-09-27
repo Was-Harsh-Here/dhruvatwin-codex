@@ -9,6 +9,7 @@ import { BharatiScene } from "@/components/twin/BharatiScene";
 import {
   CameraRig,
   TwinCanvas,
+  getTwinDisplay,
   setTwinDisplay,
   useTwinDisplay,
   type CameraPreset,
@@ -40,6 +41,18 @@ import { UnderwaterView } from "@/components/twin/water/UnderwaterView";
 import { WATER_BODIES, stationWater } from "@/components/twin/water/water-data";
 import { InteriorSystem } from "@/components/twin/interiors/InteriorSystem";
 import { adminDeskPlacement } from "@/components/twin/interiors/rooms-ops";
+import { WalkController } from "@/components/twin/interiors/WalkController";
+import { siteColliders, siteSpawn } from "@/components/twin/site-walk";
+import { FieldBadge } from "@/components/twin/FieldBadge";
+import {
+  award,
+  fieldLevel,
+  recordDistance,
+  recordRoom,
+  recordSpecies,
+  recordStation,
+  useFieldProgress,
+} from "@/lib/achievements";
 import { floorPlan } from "@/components/twin/interiors/plans";
 import type { InspectTarget } from "@/components/twin/interiors/kit";
 import { CREW } from "@/components/twin/interiors/plans";
@@ -244,6 +257,12 @@ export default function Twin() {
   const [locked, setLocked] = useState(false);
   const [position, setPosition] = useState({ x: 0, z: 0, yaw: 0 });
   const [roomId, setRoomId] = useState<string | null>(null);
+  /** Walking the ground outside the station, an alternative to orbiting it. */
+  const [siteWalk, setSiteWalk] = useState(false);
+  const siteDoorState = useRef<Record<string, boolean>>({});
+  /** Collision boxes and spawn point for the site walk, one set per station. */
+  const siteWalkColliders = useMemo(() => siteColliders(slug), [slug]);
+  const siteWalkSpawn = useMemo(() => siteSpawn(slug), [slug]);
   const [lightsOut, setLightsOut] = useState<Record<string, boolean>>({});
   const [inspect, setInspect] = useState<InspectTarget | null>(null);
   const [activeVehicle, setActiveVehicle] = useState<string | null>(null);
@@ -383,6 +402,8 @@ export default function Twin() {
   const selectWildlife = useCallback(
     (id: string) => {
       setSpeciesId(id);
+      recordSpecies(id);
+      if (id === DEV_PROFILE.id) award("dev-outside");
       setActive(null);
       setInspect(null);
       if (view === "drone") setView("exterior");
@@ -401,7 +422,10 @@ export default function Twin() {
    */
   const handleInteriorInspect = useCallback((target: InspectTarget) => {
     setInspect(target);
-    if (target.kind === "twin-admin-desk") setSpeciesId(DEV_PROFILE.id);
+    if (target.kind === "twin-admin-desk") {
+      setSpeciesId(DEV_PROFILE.id);
+      award("dev-desk");
+    }
   }, []);
 
   /**
@@ -431,6 +455,7 @@ export default function Twin() {
   const applyTarget = useCallback(
     (target: TeleportTarget) => {
       setTeleportOpen(false);
+      award("teleport");
       if (target.preset) {
         const presetDef = PRESETS.find((p) => p.id === target.preset);
         if (presetDef?.station && presetDef.station !== slug) {
@@ -494,12 +519,14 @@ export default function Twin() {
 
   const enterInterior = useCallback(() => {
     const ground = floorPlan(slug, 0);
+    setSiteWalk(false);
     setView("interior");
     setDeckView("walk");
     setLevel(0);
     setRoomId(null);
     setInspect(null);
     setSpawn(ground?.spawn ?? [0, 1.7, 0]);
+    award("inside");
   }, [slug]);
 
   const leaveInterior = useCallback(() => {
@@ -510,10 +537,28 @@ export default function Twin() {
     if (document.pointerLockElement) document.exitPointerLock();
   }, []);
 
-  /* Keyboard shortcuts: T teleport, Esc leaves walk mode. */
+  /** Brief confirmation whenever the label shortcut is pressed. */
+  const [togglesHint, setTogglesHint] = useState(false);
+  useEffect(() => {
+    if (!togglesHint) return;
+    const timer = window.setTimeout(() => setTogglesHint(false), 2200);
+    return () => window.clearTimeout(timer);
+  }, [togglesHint]);
+
+  /* Keyboard shortcuts: T teleport, L toggles every label, Esc leaves walk mode. */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing =
+        !!target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (typing) return;
       if (e.code === "KeyT") setTeleportOpen((v) => !v);
+      // One key to strip every floating label off the scene and put it back.
+      if (e.code === "KeyL") {
+        setTwinDisplay({ labels: !getTwinDisplay().labels });
+        setTogglesHint(true);
+      }
       if (e.code === "Escape" && view === "interior" && deckView === "walk" && !locked) {
         leaveInterior();
       }
@@ -521,6 +566,20 @@ export default function Twin() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [deckView, leaveInterior, locked, view]);
+
+  /**
+   * Walking suppresses floating labels entirely until the operator asks for
+   * them again from the Layers menu, so walk mode is never covered by the
+   * nameplates that used to stay on screen.
+   */
+  useEffect(() => {
+    setTwinDisplay({ walkMode: locked });
+  }, [locked]);
+
+  /** The overhead deck plan keeps its room plates even with titles off. */
+  useEffect(() => {
+    setTwinDisplay({ deckPlan: view === "interior" && deckView === "deck" });
+  }, [view, deckView]);
 
   /** A station switch restarts the tour so every pose matches the site. */
   const restartDrone = drone.restart;
@@ -670,6 +729,87 @@ export default function Twin() {
     setPosition({ x, z, yaw });
   }, []);
 
+  /** Room changes are also badge progress: ten rooms, then twenty-five. */
+  const handleRoomChange = useCallback(
+    (id: string | null) => {
+      setRoomId(id);
+      if (id) recordRoom(`${slug}:${id}`);
+    },
+    [slug],
+  );
+
+  /**
+   * Steps taken outside count towards the field badge. The walk controller
+   * reports its position every 120 ms, so a stride is the distance between two
+   * of those reports while the site walk is running.
+   */
+  const lastWalkStep = useRef<{ x: number; z: number } | null>(null);
+  useEffect(() => {
+    if (!siteWalk) {
+      lastWalkStep.current = null;
+      return;
+    }
+    const last = lastWalkStep.current;
+    lastWalkStep.current = { x: position.x, z: position.z };
+    if (!last) return;
+    const step = Math.hypot(position.x - last.x, position.z - last.z);
+    // Ignore the teleport-sized jump of a fresh spawn or a station switch.
+    if (step > 0.05 && step < 24) recordDistance(step);
+  }, [position, siteWalk]);
+
+  /** Both stations count towards the field badge. */
+  useEffect(() => {
+    recordStation(slug);
+  }, [slug]);
+
+  /** Three distinct tour stops watched earns the narrated-survey badge. */
+  const watchedStops = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (view !== "drone") return;
+    watchedStops.current.add(drone.index);
+    if (watchedStops.current.size >= 3) award("tour");
+  }, [view, drone.index]);
+
+  /** The cutaway badge is won by opening the 2.5D lens. */
+  useEffect(() => {
+    if (view === "isometric") award("cutaway");
+  }, [view]);
+
+  /** Field badge progress, read by the rail card and the walk plate. */
+  const badgeProgress = useFieldProgress();
+  const badgeLevel = fieldLevel(badgeProgress.xp);
+
+  /**
+   * The site walk only exists in the exterior view: changing view, diving
+   * under water or entering the station releases the pointer and puts the
+   * camera back under orbit control.
+   */
+  useEffect(() => {
+    if (!siteWalk) return;
+    if (view !== "exterior" || submergedBody) {
+      setSiteWalk(false);
+      setLocked(false);
+      if (document.pointerLockElement) document.exitPointerLock();
+    }
+  }, [siteWalk, view, submergedBody]);
+
+  /**
+   * Any requested camera flight ends a walk in progress: the orbit rig owns
+   * the camera again, so a preset, a minimap click or a species focus all
+   * release the pointer instead of fighting a controller that is moving the
+   * camera every frame.
+   */
+  const lastFlightRequest = useRef(`${preset}:${flyKey}`);
+  useEffect(() => {
+    const current = `${preset}:${flyKey}`;
+    const changed = lastFlightRequest.current !== current;
+    lastFlightRequest.current = current;
+    if (!changed || !siteWalk) return;
+    setSiteWalk(false);
+    setLocked(false);
+    if (document.pointerLockElement) document.exitPointerLock();
+  }, [preset, flyKey, siteWalk]);
+
   /** Wall switches live here so the room panel reports the real light state. */
   const toggleRoomLights = useCallback((id: string) => {
     setLightsOut((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -757,7 +897,7 @@ export default function Twin() {
         spawn={spawn}
         onInspect={handleInteriorInspect}
         onLevel={handleLevel}
-        onRoomChange={setRoomId}
+        onRoomChange={handleRoomChange}
         onPosition={handlePosition}
         onLockChange={setLocked}
         onExitWalk={leaveInterior}
@@ -773,6 +913,7 @@ export default function Twin() {
       lightsOut,
       handleLevel,
       handlePosition,
+      handleRoomChange,
       handleInteriorInspect,
       leaveInterior,
       toggleRoomLights,
@@ -793,11 +934,13 @@ export default function Twin() {
               {stationLabel} 3D twin
             </h1>
             <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              One interactive world: orbitable terrain outside, the survey grid and range rings
-              over the apron, every room of the station walkable inside, every water body
-              clickable, every vehicle modelled with its own maintenance record. Free camera by
-              default, a narrated drone tour, seven view modes, a 2.5D cutaway, a time of day
-              slider and a ten second seasonal timelapse.
+              One interactive world: orbitable terrain outside with a walkable apron, the survey
+              grid and range rings over the ground, every room of the station walkable inside,
+              every water body clickable, every vehicle modelled with its own maintenance record,
+              twenty-two species of wildlife and a field badge that tracks what you have seen and
+              done. Free camera by default, a narrated drone tour, seven view modes, a 2.5D
+              cutaway, a time of day slider, a ten second seasonal timelapse, and every floating
+              label removable with a single key.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -895,6 +1038,18 @@ export default function Twin() {
                       {wildlifeScene}
                       {submergedBody ? (
                         <UnderwaterView def={submergedBody} />
+                      ) : siteWalk ? (
+                        <WalkController
+                          spawn={siteWalkSpawn}
+                          colliders={siteWalkColliders}
+                          doors={[]}
+                          rooms={[]}
+                          doorState={siteDoorState}
+                          onExit={() => setSiteWalk(false)}
+                          onLockChange={setLocked}
+                          onRoomChange={() => undefined}
+                          onPosition={handlePosition}
+                        />
                       ) : (
                         <CameraRig preset={preset} presets={cameraPresets} flyKey={flyKey} />
                       )}
@@ -1009,6 +1164,12 @@ export default function Twin() {
                         <span className="text-xs">Telemetry and object labels</span>
                       </DropdownMenuCheckboxItem>
                       <DropdownMenuCheckboxItem
+                        checked={display.titles}
+                        onCheckedChange={(value) => setTwinDisplay({ titles: Boolean(value) })}
+                      >
+                        <span className="text-xs">Place titles and telemetry strips</span>
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
                         checked={display.survey}
                         onCheckedChange={(value) => setTwinDisplay({ survey: Boolean(value) })}
                       >
@@ -1031,6 +1192,7 @@ export default function Twin() {
                         onSelect={() =>
                           setTwinDisplay({
                             labels: true,
+                            titles: true,
                             survey: true,
                             hotspots: true,
                             wildlife: true,
@@ -1042,9 +1204,48 @@ export default function Twin() {
                     </DropdownMenuContent>
                   </DropdownMenu>
 
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (siteWalk) {
+                        setSiteWalk(false);
+                        setLocked(false);
+                        if (document.pointerLockElement) document.exitPointerLock();
+                        setPreset("overview");
+                        setFlyKey((key) => key + 1);
+                      } else {
+                        setSubmergedWater(null);
+                        setSiteWalk(true);
+                      }
+                    }}
+                    title="Walk the ground outside the station"
+                    className={cn(
+                      "flex items-center gap-1.5 rounded border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider backdrop-blur transition-colors",
+                      siteWalk
+                        ? "border-primary/60 bg-primary/15 text-primary"
+                        : "border-border bg-[#060B14]/80 text-foreground hover:border-primary/40",
+                    )}
+                  >
+                    <Footprints className="size-3" />
+                    {siteWalk ? "Orbit view" : "Walk the site"}
+                  </button>
+
                   <span className="cc-mono rounded border border-[#00E0C6]/30 bg-[#060B14]/80 px-2.5 py-1 text-[10px] uppercase tracking-wider text-[#00E0C6] backdrop-blur">
                     free view
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setTwinDisplay({ labels: !display.labels })}
+                    title="Remove every floating label (L)"
+                    className={cn(
+                      "cc-mono rounded border px-2.5 py-1 text-[10px] uppercase tracking-wider backdrop-blur transition-colors",
+                      display.labels
+                        ? "border-border bg-[#060B14]/80 text-muted-foreground hover:text-foreground"
+                        : "border-[#00E0C6]/40 bg-[#060B14]/80 text-[#7DF3E4]",
+                    )}
+                  >
+                    labels {display.labels ? "on" : "off"}
+                  </button>
                 </div>
               )}
 
@@ -1120,6 +1321,14 @@ export default function Twin() {
                     variant="outline"
                     size="sm"
                     className="mt-1 text-[10px]"
+                    onClick={() => setTwinDisplay({ labels: !display.labels })}
+                  >
+                    {display.labels ? "Hide labels" : "Show labels"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-1 text-[10px]"
                     onClick={leaveInterior}
                   >
                     Exit to apron
@@ -1147,6 +1356,54 @@ export default function Twin() {
                         doors open as you approach - click objects with the crosshair -
                         Esc to release the pointer
                       </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Label toggle confirmation (L) */}
+              {togglesHint && (
+                <div className="pointer-events-none absolute left-1/2 top-14 -translate-x-1/2">
+                  <span className="cc-mono rounded border border-[#00E0C6]/40 bg-[#060B14]/90 px-3 py-1.5 text-[10px] uppercase tracking-wider text-[#7DF3E4] backdrop-blur">
+                    {display.labels ? "labels on - press L to remove" : "labels off - press L to restore"}
+                  </span>
+                </div>
+              )}
+
+              {/* Site walk plate: the ground-level view outside the station */}
+              {view === "exterior" && siteWalk && (
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
+                  {locked ? (
+                    <div className="relative flex size-10 items-center justify-center">
+                      <span className="absolute h-px w-8 bg-primary/70" />
+                      <span className="absolute h-8 w-px bg-primary/70" />
+                      <span className="size-1.5 rounded-full bg-primary" />
+                    </div>
+                  ) : (
+                    <div className="rounded border border-border bg-[#060B14]/90 px-5 py-4 text-center backdrop-blur">
+                      <div className="flex items-center justify-center gap-2 font-display text-sm font-bold uppercase tracking-wider text-foreground">
+                        <Footprints className="size-4 text-primary" />
+                        Click to walk the site
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                        WASD to walk - mouse to look - Shift to sprint - Space to jump -
+                        Esc releases the pointer - click the amber airlock marker to go inside
+                      </p>
+                      <p className="cc-mono mt-2 text-[10px] text-muted-foreground">
+                        {Math.round(badgeProgress.walked)} m on foot - level {badgeLevel}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2 text-[10px]"
+                        onClick={() => {
+                          setSiteWalk(false);
+                          setPreset("overview");
+                          setFlyKey((key) => key + 1);
+                        }}
+                      >
+                        Back to orbit view
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -1235,6 +1492,8 @@ export default function Twin() {
                 }}
                 onFocus={(id) => {
                   setSpeciesId(id);
+                  recordSpecies(id);
+                  if (id === DEV_PROFILE.id) award("dev-outside");
                   setView("exterior");
                   setSubmergedWater(null);
                   setPreset(WILDLIFE_FOCUS);
@@ -1263,6 +1522,9 @@ export default function Twin() {
                 }}
               />
             )}
+            {/* Field badge: progress through the twin */}
+            <FieldBadge />
+
             {water && !underwater && (
               <WaterPanel
                 def={water}

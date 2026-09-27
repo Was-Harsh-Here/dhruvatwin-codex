@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
+import { award } from "@/lib/achievements";
 import { api } from "@/convex/_generated/api";
 import { AppShell } from "@/components/AppShell";
 import { PageHeading, Panel, PanelEmpty, PanelLoading, StatTile } from "@/components/panels";
@@ -94,6 +95,7 @@ export default function Cascade() {
     setBusy(true);
     try {
       await runCascade({ slug, triggerId, severity, isolations });
+      award("cascade");
       toast.success(
         `Drill recorded: ${preview.impacts.length} downstream nodes, ${preview.minutesBought} minute response window`,
       );

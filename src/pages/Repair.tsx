@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
+import { award } from "@/lib/achievements";
 import { api } from "@/convex/_generated/api";
 import { AppShell } from "@/components/AppShell";
 import { PageHeading, Panel, PanelEmpty, PanelLoading, StatTile } from "@/components/panels";
@@ -218,6 +219,7 @@ export default function Repair() {
             seed: 20260227 + trials,
           }),
         );
+        award("fpga");
       } catch (error) {
         toast.error(`Self-test failed to run: ${String(error).slice(0, 120)}`);
       } finally {
@@ -244,6 +246,7 @@ export default function Repair() {
             response.target === null ? "" : `, channel back in band`
           }`,
         );
+        award("repair");
         setOpenFault(null);
       } catch (error) {
         toast.error(`Repair not applied: ${String(error).slice(0, 140)}`);
@@ -274,6 +277,7 @@ export default function Repair() {
         notes: result.verdict,
       });
       toast.success("Self-test verdict recorded in the audit chain");
+      award("fpga");
     } catch (error) {
       toast.error(`Could not record verdict: ${String(error).slice(0, 140)}`);
     } finally {

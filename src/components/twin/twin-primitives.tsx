@@ -220,19 +220,38 @@ export function Snowfall({ count = 1200, spread = 220 }: { count?: number; sprea
 export interface TwinDisplayState {
   /** Floating in-canvas labels (telemetry strips, room and object labels). */
   labels: boolean;
+  /**
+   * Ambient titles: always-on nameplates over places, telemetry strips, the
+   * airlock marker and room plates. Off by default because they were the
+   * clutter operators complained about most; the Layers menu turns them back
+   * on, and they also gate every label shown while walking so walk mode is
+   * clean until they are switched on.
+   */
+  titles: boolean;
   /** Survey grid: graticule, range rings, contour rings and the north rose. */
   survey: boolean;
   /** Clickable hotspot markers scattered across the site. */
   hotspots: boolean;
   /** Antarctic wildlife, colonies and the expedition member on site. */
   wildlife: boolean;
+  /** Set while pointer lock is held, i.e. while the operator is walking. */
+  walkMode: boolean;
+  /**
+   * Set while the overhead deck plan is on screen. Room plates are the only
+   * thing labelling the boxes in that view, so ambient titles stay on there
+   * even though they are off everywhere else.
+   */
+  deckPlan: boolean;
 }
 
 let displayState: TwinDisplayState = {
   labels: true,
+  titles: false,
   survey: true,
   hotspots: true,
   wildlife: true,
+  walkMode: false,
+  deckPlan: false,
 };
 const displayListeners = new Set<() => void>();
 
@@ -246,9 +265,12 @@ export function setTwinDisplay(patch: Partial<TwinDisplayState>): void {
   const next = { ...displayState, ...patch };
   if (
     next.labels === displayState.labels &&
+    next.titles === displayState.titles &&
     next.survey === displayState.survey &&
     next.hotspots === displayState.hotspots &&
-    next.wildlife === displayState.wildlife
+    next.wildlife === displayState.wildlife &&
+    next.walkMode === displayState.walkMode &&
+    next.deckPlan === displayState.deckPlan
   ) {
     return;
   }
@@ -661,6 +683,7 @@ export function BuildingEntrance({
         position={[0, 2.9, 0]}
         border={TWIN_COLORS.amber}
         px={0.13}
+        ambient
         rows={[
           { text: label, color: TWIN_COLORS.amber },
           { text: hovered ? "CLICK TO ENTER" : "INTERIOR ACCESS", color: "#E8EEF4" },
@@ -890,12 +913,20 @@ export function Label3D({
   border = TWIN_COLORS.cyan,
   px = 0.18,
   renderOrder = 12,
+  ambient = false,
 }: {
   position: [number, number, number];
   rows: LabelRow[];
   border?: string;
   px?: number;
   renderOrder?: number;
+  /**
+   * Ambient titles, i.e. nameplates that sit over a place or a fixture whether
+   * or not the operator asked for them: telemetry strips, the airlock marker,
+   * room plates. These follow the Titles switch, which is off by default, and
+   * every label is suppressed while walking unless that switch is on.
+   */
+  ambient?: boolean;
 }) {
   const display = useTwinDisplay();
   const key = rows.map((row) => `${row.text}:${row.color ?? ""}`).join("|");
@@ -909,6 +940,11 @@ export function Label3D({
   useEffect(() => () => texture.dispose(), [texture]);
 
   if (!display.labels) return null;
+  // Ambient titles only when the operator has asked for them, or while the
+  // overhead deck plan needs its room plates to make sense.
+  if (ambient && !display.titles && !display.deckPlan) return null;
+  // While walking nothing floats over anything until they have.
+  if (display.walkMode && !display.titles) return null;
 
   return (
     <sprite
@@ -965,7 +1001,7 @@ export function TelemetryStrip({
       color: statusTone(reading.status),
     };
   });
-  return <Label3D position={position} rows={rows} border={border} px={px} />;
+  return <Label3D position={position} rows={rows} border={border} px={px} ambient />;
 }
 
 /**

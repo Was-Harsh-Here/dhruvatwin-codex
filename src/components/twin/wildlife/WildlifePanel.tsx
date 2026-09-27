@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { COLONIES, DEV_PROFILE, SPECIES } from "./wildlife-data";
+import { award } from "@/lib/achievements";
 import { formatAge, type StationSlug } from "@/lib/station";
 import { cn } from "@/lib/utils";
 import {
@@ -100,6 +101,7 @@ export function WildlifePanel({
         location: colony?.label ?? species?.seen ?? "station apron",
         note: "Recorded from the digital twin sighting log.",
       });
+      award("sighting");
       toast.success(`${species?.name ?? "Species"} sighting recorded at ${count}`);
     } catch (error) {
       toast.error(`Sighting not recorded: ${String(error).slice(0, 140)}`);

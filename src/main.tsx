@@ -33,6 +33,8 @@ const Cascade = lazy(() => import("./pages/Cascade.tsx"));
 const Repair = lazy(() => import("./pages/Repair.tsx"));
 const Resupply = lazy(() => import("./pages/Resupply.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const Terms = lazy(() => import("./pages/Terms.tsx"));
+const Privacy = lazy(() => import("./pages/Privacy.tsx"));
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
@@ -360,6 +362,9 @@ createRoot(document.getElementById("root")!).render(
                   </RequireAuth>
                 }
               />
+              {/* Public legal pages: no account required, reachable from every footer. */}
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

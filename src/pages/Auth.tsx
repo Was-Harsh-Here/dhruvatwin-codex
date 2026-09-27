@@ -17,7 +17,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { ArrowRight, Loader2, Mail, Snowflake, UserX } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -188,6 +188,28 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       <UserX className="mr-2 h-4 w-4" />
                       Continue as Guest
                     </Button>
+
+                    <p className="mt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
+                      Continuing means you agree to our{" "}
+                      <Link
+                        to="/terms"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2 hover:text-foreground"
+                      >
+                        Terms and Conditions
+                      </Link>{" "}
+                      and{" "}
+                      <Link
+                        to="/privacy"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2 hover:text-foreground"
+                      >
+                        Privacy Policy
+                      </Link>
+                      .
+                    </p>
                   </div>
                 </CardContent>
               </form>

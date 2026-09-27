@@ -1061,8 +1061,11 @@ export function adminDeskPlacement(room: Pick<RoomDef, "w" | "d">): {
   /** Where a visitor stands to look at him. */
   view: [number, number];
 } {
-  const x = room.w / 2 - 2.1;
-  const z = room.d / 2 - 2.4;
+  // Off the console columns and clear of the desk rows, on the door side of
+  // the room: Maitri's command room is 7.5 m deep, Bharati's 14.9 m, so the
+  // offset is taken from the wall rather than a fixed number.
+  const x = room.w * 0.2;
+  const z = room.d / 2 - 2.1;
   return { desk: [x, z], seat: [x, z - 0.95], view: [x, z + 1.5] };
 }
 

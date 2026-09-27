@@ -155,7 +155,7 @@ const RULES: Rule[] = [
     answer: () =>
       [
         "Wildlife layer: it is on by default in the twin, and the Layers menu switches the whole layer, the labels and the survey grid.",
-        "- Twenty-one species are modelled: Adelie, emperor, chinstrap and gentoo penguins with chicks, Weddell, crabeater and leopard seals, humpback, minke and killer whales, hourglass dolphins, terns, skuas, snow, Antarctic and cape petrels, storm petrels, toothfish, icefish, krill, sea spiders and the oasis lake invertebrates.",
+        "- Twenty-two species are modelled: Adelie, emperor, chinstrap and gentoo penguins with chicks, Weddell, crabeater and leopard seals, humpback, minke and killer whales, hourglass dolphins, terns, skuas, snow, Antarctic and cape petrels, storm petrels, toothfish, icefish, krill, sea spiders and the oasis lake invertebrates.",
         "- Bharati carries the marine animals because it is on the coast; Maitri carries what actually lives inland on the oasis. Every species card states where it is seen and links across to the other station.",
         "- Click any group for its species card: size, mass, diet, status, field facts, how many are modelled, and a sighting log. Recording a sighting writes it to the station record and the audit chain.",
       ].join("\n"),

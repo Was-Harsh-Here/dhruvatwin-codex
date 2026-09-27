@@ -413,6 +413,7 @@ function NeighbourMarker({
         position={[0, 8.6, 0]}
         border={TWIN_COLORS.amber}
         px={0.2}
+        ambient
         rows={[{ text: name, color: TWIN_COLORS.amber }]}
       />
     </group>

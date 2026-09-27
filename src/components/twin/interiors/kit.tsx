@@ -494,6 +494,7 @@ export function RoomShell({
         position={platePos}
         border={lightsOn ? INT.trim : "#6B7A8F"}
         px={0.085}
+        ambient
         rows={[
           { text: room.name.toUpperCase(), color: lightsOn ? "#E8EEF4" : "#6B7A8F" },
           { text: `${room.tag ?? ""}  ${room.occupancy ?? 0} crew`, color: lightsOn ? INT.trim : "#6B7A8F" },
@@ -560,6 +561,7 @@ export function DoorLeaf({
               position={[0, door.height + 0.34, 0]}
               border={INT.red}
               px={0.075}
+              ambient
               rows={[{ text: door.label.toUpperCase(), color: INT.red }]}
             />
           )}
