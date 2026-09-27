@@ -334,6 +334,23 @@ const schema = defineSchema(
       timestamp: v.number(),
     }).index("by_station_time", ["stationSlug", "timestamp"]),
 
+    /**
+     * Wildlife sightings recorded from the twin or reported by a field party,
+     * with the count, the location and the observer.
+     */
+    sightings: defineTable({
+      stationSlug: v.string(),
+      speciesId: v.string(),
+      speciesName: v.string(),
+      count: v.number(),
+      location: v.string(),
+      note: v.string(),
+      observer: v.string(),
+      timestamp: v.number(),
+    })
+      .index("by_time", ["timestamp"])
+      .index("by_station_time", ["stationSlug", "timestamp"]),
+
     /** FPGA self-healing and telemetry-integrity self-test results. */
     selfTests: defineTable({
       stationSlug: v.string(),

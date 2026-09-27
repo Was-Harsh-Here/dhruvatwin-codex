@@ -20,6 +20,7 @@ import {
   GitBranchPlus,
   Globe2,
   Layers,
+  PawPrint,
   PenSquare,
   Radio,
   Ship,
@@ -229,7 +230,12 @@ export default function Landing() {
               {
                 icon: Video,
                 title: "Free camera and drone tour",
-                body: "Presets fly the camera once and then release it, so dragging, panning and zooming stay where you leave them. A narrated drone tour flies ten scripted stops over each station, with a survey grid, range rings and layer switches for decluttering.",
+                body: "Presets fly the camera once and then release it, so dragging, panning and zooming stay where you leave them. A narrated drone tour flies ten or eleven scripted stops over each station, with a survey grid, range rings and layer switches for decluttering.",
+              },
+              {
+                icon: PawPrint,
+                title: "Wildlife and the expedition member",
+                body: "Twenty-one species modelled honestly on the ice: four kinds of penguin with fluffy chicks, three seals, three whales, dolphins, terns and petrels, toothfish, krill swarms and seafloor sea spiders. Click any group for its field entry, record a sighting to the station log, or follow Dev Khandhediya from the Ad\u00e9lie colony to his admin desk inside the command room.",
               },
               {
                 icon: GitBranchPlus,

@@ -224,9 +224,16 @@ export interface TwinDisplayState {
   survey: boolean;
   /** Clickable hotspot markers scattered across the site. */
   hotspots: boolean;
+  /** Antarctic wildlife, colonies and the expedition member on site. */
+  wildlife: boolean;
 }
 
-let displayState: TwinDisplayState = { labels: true, survey: true, hotspots: true };
+let displayState: TwinDisplayState = {
+  labels: true,
+  survey: true,
+  hotspots: true,
+  wildlife: true,
+};
 const displayListeners = new Set<() => void>();
 
 /** Read the current layer switches without subscribing. */
@@ -240,7 +247,8 @@ export function setTwinDisplay(patch: Partial<TwinDisplayState>): void {
   if (
     next.labels === displayState.labels &&
     next.survey === displayState.survey &&
-    next.hotspots === displayState.hotspots
+    next.hotspots === displayState.hotspots &&
+    next.wildlife === displayState.wildlife
   ) {
     return;
   }

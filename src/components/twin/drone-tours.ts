@@ -145,6 +145,21 @@ const MAITRI_TOUR: DroneStop[] = [
     dwell: 12,
   },
   {
+    id: "maitri-wildlife",
+    title: "Oasis wildlife and the expedition member",
+    tag: "Wildlife",
+    narration:
+      "Maitri is about 100 km inland, so the animals here are the ones that live on the oasis itself: snow petrels and Antarctic petrels riding the ridge line, skuas patrolling the open ground, Antarctic terns flying in to bathe at the lake margin, and storm petrels nesting in the rock crevices. The oasis lakes hold copepods, rotifers and tardigrades rather than fish. Dev Khandhediya, the expedition systems administrator, is out with the flyers; click any group to open its species card, and the same card carries a link across to the coastal species at Bharati.",
+    facts: [
+      "Snow petrels, Antarctic petrels and skuas nest on the inland nunataks",
+      "Antarctic terns fly inland to bathe and drink at the lakes",
+      "Marine species are one click away on the Bharati twin",
+    ],
+    position: [-96, 30, 70],
+    target: [-58, 4, 32],
+    dwell: 13,
+  },
+  {
     id: "maitri-interior",
     title: "Interior access",
     tag: "Habitation",
@@ -296,6 +311,21 @@ const BHARATI_TOUR: DroneStop[] = [
     ],
     position: [-96, 44, 152],
     target: [-70, 0, 110],
+    dwell: 13,
+  },
+  {
+    id: "bharati-wildlife",
+    title: "Penguins, seals and whales at the ice edge",
+    tag: "Wildlife",
+    narration:
+      "The Larsemann Hills coast carries the whole food web. Adelie, chinstrap and gentoo penguin colonies stand along the shoreline with their chicks, emperor penguins huddle further out on the fast ice, and Weddell and crabeater seals rest on the floes while a leopard seal cruises the waterline in front of the penguins. Overhead there are snow petrels, skuas, Antarctic petrels, terns, cape petrels and storm petrels; in the water, humpback whales, a minke pair, orcas, hourglass dolphins, a krill swarm, icefish and sea spiders. Dev Khandhediya stands with the Adelie colony, and the same card that opens here will find him indoors at his admin desk in the command room.",
+    facts: [
+      "Three penguin species on one shoreline, plus emperor penguins on the fast ice",
+      "Leopard seal patrols the waterline in front of the colony",
+      "Species cards link straight across to the inland station",
+    ],
+    position: [70, 34, 110],
+    target: [18, 4, 62],
     dwell: 13,
   },
   {

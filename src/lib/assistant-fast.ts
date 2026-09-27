@@ -57,6 +57,7 @@ const RULES: Rule[] = [
         "- Maintenance: telemetry repair procedures in the repair bay, and the FPGA self-healing self-test verdicts.",
         "- Resilience: cascade drill results, which node is reached next, and the isolation plan that buys the most time.",
         "- Logistics: resupply voyage position, cargo and noon reports for the sea lift from Cape Town.",
+        "- Wildlife: where each penguin, seal, whale, dolphin, bird, fish or invertebrate colony is modelled in the twin, and the sighting log behind it.",
         "- General: any question outside the station, answered normally rather than forced into a template.",
       ].join("\n"),
   },
@@ -146,6 +147,28 @@ const RULES: Rule[] = [
         "- It tracks the sea lift from Cape Town to Bharati or Maitri with position, course, distance run, remaining passage and noon reports.",
         "- The satellite panel is a Google Maps embed centred on the ship, with one-click Google Earth and route links.",
         "- Cargo, vessel particulars and the discharge plan are on the same screen.",
+      ].join("\n"),
+  },
+  {
+    id: "wildlife",
+    match: [/penguin|seal|whale|orca|dolphin|krill|wildlife|animal|species|bird|petrel|skua|tern|fish/i],
+    answer: () =>
+      [
+        "Wildlife layer: it is on by default in the twin, and the Layers menu switches the whole layer, the labels and the survey grid.",
+        "- Twenty-one species are modelled: Adelie, emperor, chinstrap and gentoo penguins with chicks, Weddell, crabeater and leopard seals, humpback, minke and killer whales, hourglass dolphins, terns, skuas, snow, Antarctic and cape petrels, storm petrels, toothfish, icefish, krill, sea spiders and the oasis lake invertebrates.",
+        "- Bharati carries the marine animals because it is on the coast; Maitri carries what actually lives inland on the oasis. Every species card states where it is seen and links across to the other station.",
+        "- Click any group for its species card: size, mass, diet, status, field facts, how many are modelled, and a sighting log. Recording a sighting writes it to the station record and the audit chain.",
+      ].join("\n"),
+  },
+  {
+    id: "expedition-member",
+    match: [/dev\b|khandhediya|admin desk|expedition member|who is (the )?(human|person|crew)|twin admin/i],
+    answer: () =>
+      [
+        "Dev Khandhediya is the expedition systems and digital twin administrator modelled in the twin.",
+        "- Outdoors he stands with the Adelie colony on the Bharati shore, or with the flyers at Maitri: click him for his profile card.",
+        "- Indoors he sits at his own admin desk in the command room of both stations, with the sensor ingest, MQTT bridge and offline outbox on the screen.",
+        "- His card carries 'Go to his desk inside' and 'Stand with him outside', so you can follow him between the two.",
       ].join("\n"),
   },
 ];

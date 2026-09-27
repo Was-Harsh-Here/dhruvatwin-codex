@@ -58,6 +58,16 @@ Twelve vehicle classes are modelled and laid out per station: PistenBully tracke
 
 Thirty-six crew figures walk fixed routes derived from the floor plan - corridor to room centre and back - so movement is repeatable and never crosses a partition except at a room's own doorway. Figures are colour coded by role, animate their legs and arms while walking, and report a profile on hover and click.
 
+### Wildlife and the expedition member
+
+Both twins carry a living wildlife layer, switchable from the Layers menu and clickable in the scene.
+
+- **Twenty-one species**, each with a real field-guide entry: Adelie, emperor, chinstrap and gentoo penguins; Weddell, crabeater and leopard seals; humpback, minke and killer whales; hourglass dolphins; Antarctic icefish, toothfish, krill, sea spiders and oasis lake invertebrates; snow petrels, south polar skuas, Antarctic petrels, Antarctic terns, cape petrels and Wilson's storm petrels.
+- **Placed honestly.** Bharati sits on the coast, so it carries the marine fauna: three penguin colonies with chicks, seals on the floes, a leopard seal cruising the waterline, whales and dolphins at the ice edge, a krill swarm, fish, seafloor sea spiders and six seabird groups including two nesting ledges. Maitri is 100 km inland, so it gets what genuinely lives on the oasis: flyers riding the ridge line, terns flying in to bathe at the lake margin, storm petrels in the rock crevices and copepods, rotifers and tardigrades in Lake Priyadarshini. Each species card states where it is seen and carries a link to the station where it is modelled.
+- **Interactive models.** Click any group for its species card: Latin name, length, mass, diet, status, four field facts, how many animals are modelled in that scene and a live sighting log read from the `sightings` table. Recording a sighting writes the count, the location and the observer to the station record and appends an audit-chain entry, and the card carries a chip per colony in the scene so switching species is one click.
+- **Cute by design.** The penguins are deliberately pushed towards the appealing end of the proportions - plump bodies, oversized heads, wide-set eyes with a glint, rosy cheeks - and they blink, hop, waddle and look around, with fluffy grey chicks following the adults. The species markings stay correct (Adelie eye ring, emperor neck patch, chinstrap strap, gentoo bonnet), so the models remain identifiable.
+- **Dev Khandhediya, expedition member.** The expedition systems and digital twin administrator is modelled in both places. Outdoors he stands with the Adelie colony on the Bharati shore, or with the flyers at Maitri, and waves at intervals; indoors he is seated at his own admin desk in the command room of both stations, with the sensor ingest, MQTT bridge and offline outbox on the screen. Clicking either one opens the same profile card, and the card carries **Go to his desk inside** and **Stand with him outside**: the desk jump lands you in the command room facing him.
+
 ### Seven engineering view modes
 
 Applied to both twins through scene-graph material overrides so every mode works everywhere.
@@ -73,7 +83,7 @@ Applied to both twins through scene-graph material overrides so every mode works
 ### Free camera, drone tour and map detail
 
 - **Free camera by default.** A camera preset flies the camera once, over about a second, and then releases it completely. Nothing writes to the camera while the operator works, so a drag, pan or zoom stays exactly where it is left. Manual input cancels an in-flight preset, and any preset can be re-flown from the Camera menu (including **Reset to overview**). Drag orbits, right-drag pans, scroll zooms, closer and further than before.
-- **Drone tour mode.** A scripted flight over each station with ten narrated stops: the site, the station structure, power, water, fuel, weather, field support, interiors and the water features. The panel carries the written briefing, the facts behind the stop, dwell progress, pause, previous, next, restart and half, normal or double speed; taking control hands the camera straight back to free view.
+- **Drone tour mode.** A scripted flight over each station with ten or eleven narrated stops: the site, the station structure, power, water, fuel, weather, field support, wildlife and the expedition member, the water features and interiors. The panel carries the written briefing, the facts behind the stop, dwell progress, pause, previous, next, restart and half, normal or double speed; taking control hands the camera straight back to free view.
 - **Survey layer.** A 20 m graticule with bold 100 m lines, 25/50/100/200 m range rings with distance labels, contour rings around each raised sector and a north rose, all switchable. Layer switches for labels, survey and hotspots live in the Layers menu and apply to the live scene without rebuilding it.
 - **Detailed station plot.** The mini-map graticule is drawn to scale with range rings, a north arrow, a 50 m scale bar, labelled water bodies and every plotted structure. Clicking a block opens its hotspot and flies the matching viewpoint; clicking a lake opens its water panel.
 - **Decluttered viewport.** Seven view modes, the camera presets and the layer switches live in three compact menus instead of open columns, the legend and context line share one block, and labels, survey and hotspot markers can each be turned off independently.
@@ -177,7 +187,7 @@ A Groq-powered assistant using `llama-3.3-70b-versatile`, with live station cont
 
 | Module | Responsibility |
 | --- | --- |
-| `schema.ts` | Stations, telemetry, alerts, personnel, microgrid, weather, satellite passes, command logs, documents, expeditions, blackout events, NPDC exports |
+| `schema.ts` | Stations, telemetry, alerts, personnel, microgrid, weather, satellite passes, command logs, documents, expeditions, blackout events, NPDC exports, cascade runs, repair log, wildlife sightings, self-tests |
 | `sensors.ts` | Single source of truth for equipment, thresholds and the simulation model |
 | `telemetry.ts` | Ten second simulation tick, live readings, history, alert lifecycle |
 | `ops.ts` | Rosters, microgrid, weather, satellite passes, ice velocity, sixty second ops tick |
@@ -186,6 +196,7 @@ A Groq-powered assistant using `llama-3.3-70b-versatile`, with live station cont
 | `cascadeGraph.ts` | Pure dependency model and deterministic propagation engine, shared by the server and the console |
 | `cascade.ts` | Cascade drill execution, persistence and audit logging |
 | `repairs.ts` | Telemetry repair procedures, repair log, FPGA self-test recording |
+| `wildlife.ts` | Species sighting log per station, census and per-species totals read by the twin's species cards |
 | `assistant.ts` | Groq station assistant with live context injection and general knowledge |
 | `seed.ts` | Idempotent seeding of stations, telemetry, rosters, plant history, passes, library, expeditions and the audit chain |
 | `crons.ts` | Ten second sensor tick and sixty second operations tick |
@@ -228,8 +239,9 @@ No key is required for Open-Meteo weather, the keyless Google Maps and Google Ea
 14. **Cascade Drill** - trigger the generator hall at critical, run it, then tick the isolation points in the plan and watch the response window and resilience index move before recording the drill.
 15. **Repair Bay** - open a fault, read the procedure, apply it and show the incident closing and the channel returning to band; then run the FPGA self-test and read the PASS verdict and the scrub interval verdict.
 16. **Resupply Voyage** - show the ship mid-passage, the noon reports, the route chart and the Google Maps and Google Earth links.
-17. **Station assistant** - press Ctrl/Cmd + K, ask an operational question, then ask a general one to show it answers both.
-18. **Role views** - switch between Admin, Commander, Scientist and Station to show navigation and action gating.
+17. **Wildlife and the expedition member** - in the twin, click the Adelie colony for its species card, record a sighting, then press **Go to his desk inside** to land in the command room facing Dev Khandhediya at his admin desk, and click the desk to open the same card indoors.
+18. **Station assistant** - press Ctrl/Cmd + K, ask an operational question, then ask a general one to show it answers both.
+19. **Role views** - switch between Admin, Commander, Scientist and Station to show navigation and action gating.
 
 ## Verification
 

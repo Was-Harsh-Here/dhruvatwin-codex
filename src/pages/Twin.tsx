@@ -14,6 +14,14 @@ import {
   type CameraPreset,
 } from "@/components/twin/twin-primitives";
 import { DRONE_TOURS } from "@/components/twin/drone-tours";
+import { Wildlife } from "@/components/twin/wildlife/Wildlife";
+import { WildlifePanel } from "@/components/twin/wildlife/WildlifePanel";
+import {
+  COLONIES,
+  DEV_PROFILE,
+  colonyFocus,
+  devFocus,
+} from "@/components/twin/wildlife/wildlife-data";
 import { DroneFlight, DroneTourPanel, useDroneTour } from "@/components/twin/DroneTour";
 import {
   DropdownMenu,
@@ -31,6 +39,7 @@ import { vehicleInstances, vehicleById } from "@/components/twin/vehicle-data";
 import { UnderwaterView } from "@/components/twin/water/UnderwaterView";
 import { WATER_BODIES, stationWater } from "@/components/twin/water/water-data";
 import { InteriorSystem } from "@/components/twin/interiors/InteriorSystem";
+import { adminDeskPlacement } from "@/components/twin/interiors/rooms-ops";
 import { floorPlan } from "@/components/twin/interiors/plans";
 import type { InspectTarget } from "@/components/twin/interiors/kit";
 import { CREW } from "@/components/twin/interiors/plans";
@@ -212,6 +221,9 @@ class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean
 
 type ViewKind = "exterior" | "interior" | "isometric" | "drone";
 
+/** Injected camera preset used when a species or the expedition member is picked. */
+const WILDLIFE_FOCUS = "wildlife-focus";
+
 /** Injected camera preset used when a body with no preset of its own is picked. */
 const WATER_FOCUS = "water-focus";
 
@@ -247,6 +259,7 @@ export default function Twin() {
   const [active, setActive] = useState<string | null>(null);
   /** Bumped on every explicit camera request so a preset can re-fly. */
   const [flyKey, setFlyKey] = useState(0);
+  const [speciesId, setSpeciesId] = useState<string | null>(null);
   const display = useTwinDisplay();
   const drone = useDroneTour(DRONE_TOURS[slug]);
 
@@ -352,6 +365,43 @@ export default function Twin() {
   const flyTo = useCallback((id: string) => {
     setPreset(id);
     setFlyKey((key) => key + 1);
+  }, []);
+
+  /**
+   * Camera pose for the selected animal or for the expedition member.
+   * Colony positions come from the wildlife catalogue, so the flight always
+   * lands on the group the operator actually clicked.
+   */
+  const wildlifePose = useMemo(() => {
+    if (!speciesId) return null;
+    if (speciesId === DEV_PROFILE.id) return devFocus(slug);
+    const colony = (COLONIES[slug] ?? []).find((entry) => entry.speciesId === speciesId);
+    return colony ? colonyFocus(colony) : null;
+  }, [speciesId, slug]);
+
+  /** Select an animal in the scene and fly the camera onto its group. */
+  const selectWildlife = useCallback(
+    (id: string) => {
+      setSpeciesId(id);
+      setActive(null);
+      setInspect(null);
+      if (view === "drone") setView("exterior");
+      setPreset(WILDLIFE_FOCUS);
+      setFlyKey((key) => key + 1);
+    },
+    [view],
+  );
+
+  /**
+   * Interior clicks.
+   *
+   * Every fixture reports itself to the inspector as before, and the twin admin
+   * desk additionally opens the expedition member's profile, so the same card
+   * follows him from the penguin colony to his desk indoors.
+   */
+  const handleInteriorInspect = useCallback((target: InspectTarget) => {
+    setInspect(target);
+    if (target.kind === "twin-admin-desk") setSpeciesId(DEV_PROFILE.id);
   }, []);
 
   /**
@@ -531,6 +581,17 @@ export default function Twin() {
    * coordinates. Everything else flies along the standard list.
    */
   const cameraPresets = useMemo<CameraPreset[]>(() => {
+    if (preset === WILDLIFE_FOCUS && wildlifePose) {
+      return [
+        ...PRESETS,
+        {
+          id: WILDLIFE_FOCUS,
+          label: speciesId === DEV_PROFILE.id ? DEV_PROFILE.name : "Wildlife",
+          position: wildlifePose.position,
+          target: wildlifePose.target,
+        },
+      ];
+    }
     if (preset === WATER_FOCUS && water) {
       const [x, z] = water.position;
       return [
@@ -559,7 +620,7 @@ export default function Twin() {
       }
     }
     return PRESETS;
-  }, [preset, water, activeVehicle]);
+  }, [preset, water, activeVehicle, wildlifePose, speciesId]);
 
   /** Sun state memoised on its primitives so the scene element stays stable. */
   const sun = useMemo(
@@ -675,6 +736,17 @@ export default function Twin() {
     ],
   );
 
+  /**
+   * Wildlife layer, shared between the free-view canvas and the drone canvas,
+   * memoised so a walking player never rebuilds the colonies.
+   */
+  const wildlifeScene = useMemo(
+    () => (
+      <Wildlife slug={slug} activeId={speciesId} onSelect={selectWildlife} />
+    ),
+    [slug, speciesId, selectWildlife],
+  );
+
   /** The furnished deck, memoised so a step does not rebuild every room. */
   const interiorScene = useMemo(
     () => (
@@ -683,7 +755,7 @@ export default function Twin() {
         level={level}
         view={deckView}
         spawn={spawn}
-        onInspect={setInspect}
+        onInspect={handleInteriorInspect}
         onLevel={handleLevel}
         onRoomChange={setRoomId}
         onPosition={handlePosition}
@@ -701,6 +773,7 @@ export default function Twin() {
       lightsOut,
       handleLevel,
       handlePosition,
+      handleInteriorInspect,
       leaveInterior,
       toggleRoomLights,
     ],
@@ -808,6 +881,7 @@ export default function Twin() {
                       cameraPosition={DRONE_TOURS[slug][0].position}
                     >
                       {exteriorScene}
+                      {wildlifeScene}
                       <DroneFlight tour={drone} />
                     </TwinCanvas>
                   ) : (
@@ -818,6 +892,7 @@ export default function Twin() {
                       cameraPosition={[150, 95, 150]}
                     >
                       {exteriorScene}
+                      {wildlifeScene}
                       {submergedBody ? (
                         <UnderwaterView def={submergedBody} />
                       ) : (
@@ -945,10 +1020,21 @@ export default function Twin() {
                       >
                         <span className="text-xs">Hotspot markers</span>
                       </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={display.wildlife}
+                        onCheckedChange={(value) => setTwinDisplay({ wildlife: Boolean(value) })}
+                      >
+                        <span className="text-xs">Wildlife and expedition member</span>
+                      </DropdownMenuCheckboxItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onSelect={() =>
-                          setTwinDisplay({ labels: true, survey: true, hotspots: true })
+                          setTwinDisplay({
+                            labels: true,
+                            survey: true,
+                            hotspots: true,
+                            wildlife: true,
+                          })
                         }
                       >
                         <span className="text-xs">Show every layer</span>
@@ -1139,6 +1225,44 @@ export default function Twin() {
 
           {/* Right rail */}
           <div className="space-y-4">
+            {speciesId && (
+              <WildlifePanel
+                slug={slug}
+                selectedId={speciesId}
+                onClose={() => {
+                  setSpeciesId(null);
+                  setPreset((current) => (current === WILDLIFE_FOCUS ? "overview" : current));
+                }}
+                onFocus={(id) => {
+                  setSpeciesId(id);
+                  setView("exterior");
+                  setSubmergedWater(null);
+                  setPreset(WILDLIFE_FOCUS);
+                  setFlyKey((key) => key + 1);
+                }}
+                onFocusDesk={() => {
+                  const plan = floorPlan(slug, 0);
+                  const command = plan?.rooms.find(
+                    (room) => room.id === DEV_PROFILE.deskRoomId,
+                  );
+                  setView("interior");
+                  setDeckView("walk");
+                  setLevel(0);
+                  setRoomId(command?.id ?? null);
+                  if (!plan || !command) {
+                    setSpawn([0, 1.7, 0]);
+                    return;
+                  }
+                  // Stand in front of his desk, looking at him rather than at a wall.
+                  const { view: deskView } = adminDeskPlacement(command);
+                  setSpawn([
+                    command.x + deskView[0],
+                    plan.y + 1.7,
+                    command.z + deskView[1],
+                  ]);
+                }}
+              />
+            )}
             {water && !underwater && (
               <WaterPanel
                 def={water}

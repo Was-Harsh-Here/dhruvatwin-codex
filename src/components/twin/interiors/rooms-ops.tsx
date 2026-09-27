@@ -202,6 +202,8 @@ function CommandCentre({ room, extra = 6 }: { room: RoomDef; extra?: number }) {
         ))}
       </Interactive>
 
+      <TwinAdminDesk room={room} />
+
       <WallClock p={at(room, room.w / 2 - 0.6, 0, 2.4)} rot={-Math.PI / 2} />
       <WallClock p={at(room, room.w / 2 - 0.6, 1.2, 2.4)} rot={-Math.PI / 2} utc={false} />
       <PipeRun from={at(room, -room.w / 2 + 0.3, -room.d / 2 + 0.3, 2.9)} to={at(room, room.w / 2 - 0.3, -room.d / 2 + 0.3, 2.9)} tone={INT.amber} clamps={5} />
@@ -1038,6 +1040,90 @@ function WorkshopRoom({ room }: { room: RoomDef }) {
       <Extinguisher p={at(room, -room.w / 2 + 0.4, -room.d / 2 + 0.5, 0)} />
       <WallPlate position={at(room, 0, -room.d / 2 + 0.16, 2.5)} text="WORKSHOP  EYE AND EAR PROTECTION" tone={INT.amber} width={3.6} />
     </group>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Digital twin admin desk                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Where the twin admin desk sits inside a command room, in metres from the
+ * room centre. The desk faces the door side of the room, so someone walking in
+ * meets the administrator face on rather than the back of a monitor, and the
+ * console can drop the operator straight in front of him.
+ */
+export function adminDeskPlacement(room: Pick<RoomDef, "w" | "d">): {
+  /** Desk centre. */
+  desk: [number, number];
+  /** Where the seated administrator ends up. */
+  seat: [number, number];
+  /** Where a visitor stands to look at him. */
+  view: [number, number];
+} {
+  const x = room.w / 2 - 2.1;
+  const z = room.d / 2 - 2.4;
+  return { desk: [x, z], seat: [x, z - 0.95], view: [x, z + 1.5] };
+}
+
+/**
+ * The digital twin administrator's desk.
+ *
+ * One seat in the command room belongs to the twin itself. Dev Khandhediya
+ * keeps the sensor ingest, the MQTT bridge and the offline outbox running from
+ * here, and clicking the desk opens his profile: the same card the outdoor
+ * scene opens when he is standing with the Adelie colony.
+ */
+function TwinAdminDesk({ room }: { room: RoomDef }) {
+  const { desk } = adminDeskPlacement(room);
+  const rows = [
+    { text: "DIGITAL TWIN", color: INT.trim },
+    { text: "INGEST  NOMINAL", color: INT.green },
+    { text: "MQTT BRIDGE  UP", color: INT.screenBlue },
+    { text: "OUTBOX  0 HELD", color: INT.screenAmber },
+  ];
+
+  return (
+    <Interactive
+      label="Dev Khandhediya - twin admin desk"
+      kind="twin-admin-desk"
+      detail="Expedition systems and digital twin administrator. Owns the sensor ingest, the MQTT bridge and the offline outbox; click for his profile."
+      position={at(room, desk[0], desk[1], 0)}
+      rotation={[0, Math.PI, 0]}
+      labelHeight={2.9}
+    >
+      <WorkstationDesk p={[0, 0, 0]} rows={rows} seated={false} />
+      {/* He sits facing the room, so the desk reads as his, not the monitors'.
+          Local +z is the far side once the desk is turned to face the door. */}
+      <group position={[0, 0, 0.95]}>
+        <Chair p={[0, 0, 0]} rot={Math.PI} kind="task" />
+        <Figure p={[0, 0, 0]} rot={Math.PI} role="engineer" seated />
+      </group>
+      {/* Side cabinet: hard hat, mug and the paper log he still keeps. */}
+      <group position={[1.35, 0, 0.1]} rotation={[0, -0.4, 0]}>
+        <CabinetUnit p={[0, 0, 0]} w={0.62} h={1.02} d={0.55} doors={2} tone={INT.steel} />
+        <Cyl p={[0, 1.12, 0]} r={0.17} h={0.12} color={INT.amber} roughness={0.6} />
+        <Box p={[0, 1.06, 0.16]} s={[0.3, 0.02, 0.12]} color={INT.amber} roughness={0.6} />
+        <Cyl p={[-0.16, 1.07, -0.1]} r={0.055} h={0.11} color="#E8EEF4" roughness={0.4} />
+        <Box p={[0.18, 1.07, -0.08]} s={[0.34, 0.03, 0.24]} color="#E8EEF4" roughness={0.5} />
+      </group>
+      {/* Nameplate on the visitor side, plus a sign you can find from anywhere. */}
+      <Label3D
+        position={[0, 0.62, -0.45]}
+        border={INT.amber}
+        px={0.05}
+        rows={[{ text: "DEV KHANDHEDIYA", color: INT.amber }]}
+      />
+      <Label3D
+        position={[0, 2.2, 0]}
+        border={INT.amber}
+        px={0.07}
+        rows={[
+          { text: "DEV KHANDHEDIYA", color: INT.amber },
+          { text: "TWIN ADMIN DESK - CLICK FOR PROFILE", color: INT.trim },
+        ]}
+      />
+    </Interactive>
   );
 }
 
