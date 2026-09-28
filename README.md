@@ -176,7 +176,10 @@ The twin keeps a progression layer over everything you do in it, stored in local
 
 ### Terms and privacy
 
-Two public legal documents, `/terms` and `/privacy`, written against what the platform actually does: what DhruvaTwin is and is not (a prototype with simulated data, not an operational system), acceptable use, the third parties it talks to, what is collected and why, retention, and the rights a user has. They are linked from the landing footer and from every signed-in footer.
+Two public legal documents, `/terms` and `/privacy`, linked from the landing footer, from every signed-in footer and from the consent line on the sign-in page.
+
+- **Terms (`/terms`)** cover what DhruvaTwin is and is not, acceptance and eligibility, accounts and access, acceptable use, an explicit **assumption-of-risk** section stating that the platform must not be used for navigation, clearance, life-safety or any other professional decision and that simulated data, modelled voyages and AI output carry no operational guarantee, ownership of and responsibility for user content, the AI features and their limits, simulated and third-party data, intellectual property and no-endorsement, availability and offline losses, security and responsible disclosure, termination with survival, a **disclaimer and limitation of liability** including an aggregate cap for a free non-commercial prototype, **indemnity**, governing law with an informal resolution step before the Indian courts, and general provisions.
+- **Privacy (`/privacy`)** covers the controller, what is collected and explicitly what is not, how it is used, legal basis and consent including withdrawal, who it is shared with, an **AI processing** section describing exactly what leaves the deployment when the assistant or advisor is used, cookies and local storage, concrete retention rules, security and breach notification, international transfers, the rights of a data principal under the Digital Personal Data Protection Act 2023 including nomination and escalation to the Data Protection Board, children, and a grievance contact with a thirty day response commitment.
 
 ### Command screens (20)
 
@@ -190,6 +193,8 @@ Open-Meteo (no API key) provides hourly temperature, wind, surface pressure and 
 
 A Groq-powered assistant using `llama-3.3-70b-versatile`, with live station context injected on every request: telemetry channels, open incidents, continuity prediction, microgrid state and local weather.
 
+- **It is the guide for the whole console.** The assistant is given the console map - every screen, its path and what it holds - and it is instructed to answer guidance questions with the exact screen name, the path and the two or three steps that matter, then to name the next thing to open. A "Guide me through the console from the start" prompt on the empty dock returns an ordered eight-step walkthrough, and questions such as "where do I change the isolation plan" or "what should I do next" are routed to the right screen rather than answered vaguely.
+- **Guidance is answered instantly.** Screen routing, the guided walkthrough, the click-to-label behaviour, the field badge and how the model key works are all answered locally in the same tick with no round trip, so the guide never makes the operator wait to find out where something is. The same routing exists server side in the deterministic rule engine, so the guide still works with no model key configured.
 - **General questions are answered too.** The assistant decides what a question needs: operational questions are grounded in live context and never invent sensor values; general questions (polar science, engineering, history, definitions, writing help) are answered properly from the model's own knowledge; mixed questions get both parts. Station context is supplied, not forced into unrelated answers.
 - **Responsiveness.** Greetings, identity, console how-to and topic help are answered locally in the same tick with no round trip. A server answer types itself out at reading speed instead of painting in one block, the wait shows staged status text, and every answer is stamped with its model and elapsed time. Ctrl/Cmd + K opens the dock, Escape closes it, and the last answer can be copied or the last question retried in one click.
 - **Offline.** Without a Groq key a deterministic rule engine answers over the same live context, backed by a built-in polar reference set covering the Antarctic Treaty, katabatic wind, TMR and single-event upsets, polar water systems, NPDC metadata, generator maintenance, sea ice and the station history.
@@ -252,7 +257,7 @@ The platform seeds itself: opening the dashboard runs `bootstrap.ensureSeeded` o
 
 | Variable | Purpose |
 | --- | --- |
-| `GROQ_API_KEY` | Enables the station assistant and the AI advisor on `llama-3.3-70b-versatile`. Without it the assistant answers from a deterministic local rule engine and a built-in polar reference set over the same live context, and the advisor produces its briefing from a deterministic rule engine over the same live inputs. |
+| `GROQ_API_KEY` | Enables the station assistant and the AI advisor on `llama-3.3-70b-versatile`. Set it as a deployment secret in the project's Keys tab, never in the source. Without it the assistant answers from a deterministic local rule engine and a built-in polar reference set over the same live context, and the advisor produces its briefing from a deterministic rule engine over the same live inputs. The console states which engine answered, so a missing key is visible rather than silent. |
 | `VITE_GOOGLE_MAPS_API_KEY` | Optional. Upgrades the resupply screen from the keyless Google Maps embed to the Maps JavaScript API. |
 
 No key is required for Open-Meteo weather, the keyless Google Maps and Google Earth links, or the public HiveMQ broker.

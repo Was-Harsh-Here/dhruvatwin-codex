@@ -17,6 +17,8 @@ interface Message {
 
 /** Suggested questions, split between station operations and general knowledge. */
 const SUGGESTIONS = [
+  "Guide me through the console from the start.",
+  "What should I do next on station, and why?",
   "Summarise the current continuity risk and what I should do before the drop.",
   "Which incidents are critical right now and what is the triage order?",
   "How much generation headroom does the microgrid have?",
@@ -252,8 +254,10 @@ export function AssistantDock({
             {messages.length === 0 && (
               <div className="space-y-3">
                 <p className="text-xs leading-relaxed text-muted-foreground">
+                  I am your guide through {stationLabel}: ask where something is, what to open next or
+                  how a screen is meant to be used, and the answer names the screen and the steps.
                   Ask about continuity risk, incidents, power headroom, the water path or the local
-                  forecast, and answers are grounded in live {stationLabel} telemetry. Ask anything else -
+                  forecast and answers are grounded in live {stationLabel} telemetry. Ask anything else -
                   polar science, engineering, definitions, history - and it answers as a general
                   assistant instead of refusing.
                 </p>
@@ -335,6 +339,9 @@ export function AssistantDock({
               </Button>
             </form>
             <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="border-border text-[9px] text-muted-foreground">
+                console guide
+              </Badge>
               <Badge variant="outline" className="border-border text-[9px] text-muted-foreground">
                 telemetry + incidents + continuity + microgrid + weather
               </Badge>
