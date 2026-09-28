@@ -124,6 +124,7 @@ export function LegalShell({
           <div className="pointer-events-none absolute -bottom-1 right-4 hidden opacity-95 xl:block">
             <PenguinWaddle
               kinds={["adelie", "gentoo"]}
+              chicks={1}
               penguinClassName="h-20 w-auto"
               className="gap-1"
               bob={3}

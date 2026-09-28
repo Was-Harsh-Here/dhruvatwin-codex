@@ -9,7 +9,6 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   AntarcticPoster,
   BrandWordmark,
-  IdentityTable,
 } from "@/components/landing/AntarcticPoster";
 import { PenguinWaddle } from "@/components/landing/PenguinSvg";
 import { PROJECT_IDENTITY } from "@/lib/station";
@@ -202,7 +201,7 @@ export default function Landing() {
                   Team {PROJECT_IDENTITY.team}
                 </Badge>
                 <Badge variant="outline" className="border-primary/40 text-primary">
-                  PS {PROJECT_IDENTITY.psId}
+                  {PROJECT_IDENTITY.category}
                 </Badge>
                 <Badge variant="outline" className="border-border text-muted-foreground">
                   {PROJECT_IDENTITY.event}
@@ -227,7 +226,22 @@ export default function Landing() {
                 depends on it.
               </p>
 
-              <IdentityTable className="mt-6 max-w-md" />
+              {/*
+                Station coordinates as a quiet line, not a spec table. The
+                hackathon identity lives in the footer, where it belongs on a
+                public page; the hero is for the place and the work.
+              */}
+              <p className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                <span>Maitri</span>
+                <span className="text-[#00E0C6]/50">/</span>
+                <span>70&deg;45&prime;52&Prime;S 11&deg;44&prime;03&Prime;E</span>
+                <span className="text-[#00E0C6]/50">/</span>
+                <span>Bharati</span>
+                <span className="text-[#00E0C6]/50">/</span>
+                <span>69&deg;24&prime;41&Prime;S 76&deg;11&prime;15&Prime;E</span>
+                <span className="text-[#00E0C6]/50">/</span>
+                <span>3,098 km apart</span>
+              </p>
 
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <Button asChild size="lg" className="cursor-pointer">
@@ -547,20 +561,16 @@ export default function Landing() {
                 <Separator className="hidden w-px sm:block" orientation="vertical" />
                 <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground">
                   <span>
-                    <span className="cc-mono block text-base text-foreground">26060</span>
-                    Problem Statement ID
-                  </span>
-                  <span>
-                    <span className="cc-mono block text-base text-foreground">SIH 2026</span>
-                    Smart India Hackathon
-                  </span>
-                  <span>
                     <span className="cc-mono block text-base text-foreground">2</span>
                     Stations instrumented
                   </span>
                   <span>
                     <span className="cc-mono block text-base text-foreground">16</span>
                     Command screens
+                  </span>
+                  <span>
+                    <span className="cc-mono block text-base text-foreground">22</span>
+                    Species on the ice
                   </span>
                   <span>
                     <span className="cc-mono block text-base text-foreground">46</span>
@@ -583,7 +593,6 @@ export default function Landing() {
             {PROJECT_IDENTITY.name}
           </span>
           <span>Team {PROJECT_IDENTITY.team}</span>
-          <span>PS {PROJECT_IDENTITY.psId}</span>
           <span>{PROJECT_IDENTITY.event}</span>
           <span>{PROJECT_IDENTITY.agency}</span>
           <nav className="ml-auto flex items-center gap-3">
