@@ -1,9 +1,10 @@
 import { Billboard, ContactShadows, OrbitControls } from "@react-three/drei";
 
 import {
-  toggleLabelPin,
-  unpinLabel,
+  dismissLabel,
+  pinLabel,
   useLabelPinned,
+  useLabelSuppressed,
 } from "./scene-labels";
 import type { SensorSummary } from "./types";
 
@@ -366,13 +367,16 @@ export function Hotspot({
   const ref = useRef<THREE.Group>(null);
   const pinId = `hotspot:${label}`;
   const pinned = useLabelPinned(pinId);
+  const suppressed = useLabelSuppressed(pinId);
   useFrame(({ clock }) => {
     if (ref.current) {
       ref.current.position.y = position[1] + Math.sin(clock.elapsedTime * 2) * 0.25;
     }
   });
   if (!display.hotspots) return null;
-  const showLabel = pinned || display.titles;
+  // Pinned by a click, or forced on by the Titles switch, but never once the
+  // operator has closed it with the cross.
+  const showLabel = (pinned || display.titles) && !suppressed;
   return (
     <>
       <group
@@ -381,7 +385,8 @@ export function Hotspot({
         onClick={(e) => {
           e.stopPropagation();
           onSelect(label);
-          toggleLabelPin(pinId);
+          // A deliberate click always brings the label back, dismissal included.
+          pinLabel(pinId);
         }}
         onPointerOver={(e) => {
           e.stopPropagation();
@@ -425,9 +430,8 @@ export function Hotspot({
                 color: active ? TWIN_COLORS.red : TWIN_COLORS.cyan,
               },
               ...(detail ?? []),
-              ...(pinned ? [{ text: "cross to remove", color: "#6B7A8F" }] : []),
             ]}
-            onDismiss={pinned ? () => unpinLabel(pinId) : undefined}
+            onDismiss={() => dismissLabel(pinId)}
             requested={pinned}
           />
         </group>
@@ -994,31 +998,44 @@ function labelTexture(rows: LabelRow[], border: string) {
  * reads at a given camera distance. Labels honour the console's layer switch,
  * so the whole world can be decluttered without rebuilding the scene.
  */
-/** Cross texture for the dismiss control, built once and shared. */
+/**
+ * Red cross texture for the dismiss control, built once and shared.
+ *
+ * Deliberately loud: a filled red disc with a white cross and a pale ring, so
+ * there is no doubt about how a label is removed. Operators were left hunting
+ * for the control, which is a design fault, not a user fault.
+ */
 let dismissTexture: THREE.Texture | null = null;
 function getDismissTexture(): THREE.Texture {
   if (dismissTexture) return dismissTexture;
   if (typeof document === "undefined") return new THREE.Texture();
   const canvas = document.createElement("canvas");
-  canvas.width = 96;
-  canvas.height = 96;
+  canvas.width = 128;
+  canvas.height = 128;
   const ctx = canvas.getContext("2d");
   if (ctx) {
-    ctx.fillStyle = "rgba(6, 11, 20, 0.94)";
+    // Pale halo so the control reads against snow, sky or a dark hull.
+    ctx.fillStyle = "rgba(232, 238, 244, 0.95)";
     ctx.beginPath();
-    ctx.arc(48, 48, 45, 0, Math.PI * 2);
+    ctx.arc(64, 64, 62, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "#7D8DA0";
-    ctx.lineWidth = 5;
+    // Red disc.
+    ctx.fillStyle = "#E01F2E";
+    ctx.beginPath();
+    ctx.arc(64, 64, 55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#7E0C15";
+    ctx.lineWidth = 4;
     ctx.stroke();
-    ctx.strokeStyle = "#E8EEF4";
-    ctx.lineWidth = 9;
+    // White cross.
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 17;
     ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.moveTo(33, 33);
-    ctx.lineTo(63, 63);
-    ctx.moveTo(63, 33);
-    ctx.lineTo(33, 63);
+    ctx.moveTo(42, 42);
+    ctx.lineTo(86, 86);
+    ctx.moveTo(86, 42);
+    ctx.lineTo(42, 86);
     ctx.stroke();
   }
   const texture = new THREE.CanvasTexture(canvas);
@@ -1072,6 +1089,18 @@ export function Label3D({
 
   useEffect(() => () => texture.dispose(), [texture]);
 
+  /**
+   * The dismiss control is sized against the label, not the world.
+   *
+   * A label is drawn at `px` world units per texture pixel, so a two-row label
+   * is over thirteen metres tall on screen from the site camera. A fixed-size
+   * cross next to a label that large is a couple of pixels wide and impossible
+   * to hit, which is exactly why operators could not find it. Scaling the cross
+   * to roughly a third of the label height keeps it obvious and clickable at
+   * every distance the label itself can be read from.
+   */
+  const crossSize = Math.min(6, Math.max(1.25, height * px * 0.32));
+
   if (!display.labels) return null;
   // Ambient titles only when the operator has asked for them, or while the
   // overhead deck plan needs its room plates to make sense.
@@ -1082,7 +1111,28 @@ export function Label3D({
 
   return (
     <group position={position}>
-      <sprite scale={[width * px, height * px, 1]} renderOrder={renderOrder}>
+      <sprite
+        scale={[width * px, height * px, 1]}
+        renderOrder={renderOrder}
+        /*
+          Clicking the label removes it. The cross is the explicit control, but
+          the label itself is the largest target in the scene, and an operator
+          who wants a label gone should not have to aim.
+        */
+        onClick={(event) => {
+          if (!onDismiss) return;
+          event.stopPropagation();
+          onDismiss();
+        }}
+        onPointerOver={() => {
+          if (!onDismiss) return;
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          if (!onDismiss) return;
+          document.body.style.cursor = "auto";
+        }}
+      >
         <spriteMaterial
           map={texture}
           transparent
@@ -1091,9 +1141,19 @@ export function Label3D({
           toneMapped={false}
         />
       </sprite>
-      {/* Dismiss control: a camera-facing cross that removes this one label. */}
+      {/*
+        Dismiss control: a red camera-facing cross at the top right of the
+        label. It sits just outside the label, is never occluded and is sized
+        for a click at any camera distance the label itself is readable from.
+      */}
       {onDismiss && (
-        <Billboard position={[width * px * 0.5 + 0.4, height * px * 0.5, 0.02]}>
+        <Billboard
+          position={[
+            width * px * 0.5 + crossSize * 0.62,
+            height * px * 0.5 + crossSize * 0.08,
+            0.02,
+          ]}
+        >
           <mesh
             renderOrder={renderOrder + 1}
             onClick={(e) => {
@@ -1108,7 +1168,7 @@ export function Label3D({
               document.body.style.cursor = "auto";
             }}
           >
-            <planeGeometry args={[0.7, 0.7]} />
+            <planeGeometry args={[crossSize, crossSize]} />
             <meshBasicMaterial
               map={getDismissTexture()}
               transparent

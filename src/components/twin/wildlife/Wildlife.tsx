@@ -1,6 +1,13 @@
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
+import {
+  dismissLabel,
+  pinLabel,
+  useHoverHold,
+  useLabelPinned,
+  useLabelSuppressed,
+} from "../scene-labels";
 import { Label3D, TWIN_COLORS, useTwinDisplay } from "../twin-primitives";
 import {
   COLONIES,
@@ -886,8 +893,11 @@ function ExpeditionMember({
 }) {
   const group = useRef<THREE.Group>(null);
   const arm = useRef<THREE.Group>(null);
-  const [hovered, setHovered] = useState(false);
+  const { hovered, over, out } = useHoverHold();
   const display = useTwinDisplay();
+  const pinId = `wildlife:${DEV_PROFILE.id}`;
+  const pinned = useLabelPinned(pinId);
+  const suppressed = useLabelSuppressed(pinId);
   const position = DEV_PROFILE.positions[station];
 
   useFrame(({ clock }) => {
@@ -908,16 +918,18 @@ function ExpeditionMember({
       position={position}
       onPointerOver={(event) => {
         event.stopPropagation();
-        setHovered(true);
+        over();
         document.body.style.cursor = "pointer";
       }}
       onPointerOut={() => {
-        setHovered(false);
+        out();
         document.body.style.cursor = "auto";
       }}
       onClick={(event) => {
         event.stopPropagation();
         onSelect(DEV_PROFILE.id);
+        // Clicking him always brings his label back, even after it was closed.
+        pinLabel(pinId);
       }}
     >
       <group ref={group}>
@@ -947,7 +959,7 @@ function ExpeditionMember({
         <mesh geometry={G.ball} material={M.glint} position={[0.055, 1.66, 0.245]} scale={0.009} />
         <mesh geometry={G.ball} material={M.glint} position={[-0.045, 1.66, 0.245]} scale={0.009} />
       </group>
-      {(hovered || active) && display.wildlifeLabels && (
+      {(hovered || active || pinned) && display.wildlifeLabels && !suppressed && (
         <Label3D
           position={[0, 2.6, 0]}
           px={0.1}
@@ -956,6 +968,8 @@ function ExpeditionMember({
             { text: DEV_PROFILE.name, color: TWIN_COLORS.amber },
             { text: hovered ? "click for his profile" : "expedition member", color: "#E8EEF4" },
           ]}
+          onDismiss={() => dismissLabel(pinId)}
+          requested={pinned}
         />
       )}
     </group>
@@ -1003,8 +1017,11 @@ function Colony({
   active: boolean;
   onSelect: (speciesId: string) => void;
 }) {
-  const [hovered, setHovered] = useState(false);
+  const { hovered, over, out } = useHoverHold();
   const display = useTwinDisplay();
+  const pinId = `wildlife:${colony.id}`;
+  const pinned = useLabelPinned(pinId);
+  const suppressed = useLabelSuppressed(pinId);
   const species = SPECIES[colony.speciesId];
   const centre: [number, number] = [0, 0];
 
@@ -1136,20 +1153,22 @@ function Colony({
       position={colony.position}
       onPointerOver={(event) => {
         event.stopPropagation();
-        setHovered(true);
+        over();
         document.body.style.cursor = "pointer";
       }}
       onPointerOut={() => {
-        setHovered(false);
+        out();
         document.body.style.cursor = "auto";
       }}
       onClick={(event) => {
         event.stopPropagation();
         onSelect(colony.speciesId);
+        // Clicking the group always brings its label back.
+        pinLabel(pinId);
       }}
     >
       {content}
-      {(hovered || active) && species && display.wildlifeLabels && (
+      {(hovered || active || pinned) && species && display.wildlifeLabels && !suppressed && (
         <Label3D
           position={[0, LABEL_HEIGHT[colony.kind], 0]}
           px={0.1}
@@ -1158,6 +1177,8 @@ function Colony({
             { text: species.name, color: active ? TWIN_COLORS.red : TWIN_COLORS.cyan },
             { text: hovered ? "click for the species card" : colony.label, color: "#E8EEF4" },
           ]}
+          onDismiss={() => dismissLabel(pinId)}
+          requested={pinned}
         />
       )}
     </group>

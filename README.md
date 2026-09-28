@@ -163,7 +163,7 @@ The user asked for a live map that tracks the cargo supply ship. The tracker is 
 - **Scrub the passage.** The timeline slider moves the single clock the whole page is built from, with departure, mid-passage, arrival and jump-to-now preset buttons. Scrub it and the position, distance run, sea state, noon reports and countdown all follow together, which is how the discharge window at the station can be checked before the ship is there.
 - Noon reports with position, distance run, average speed, wind, swell and air temperature, with the ice-edge crossing marked.
 - Cargo manifest and vessel particulars for the modelled charter vessel.
-- **Google Maps** satellite embed centred on the ship or any waypoint, **Google Earth** deep link, and route links to the destination station. The embed is keyless, so the tracker works with no configuration; adding `VITE_GOOGLE_MAPS_API_KEY` upgrades it to the Maps JavaScript API.
+- **Google Maps** satellite embed centred on the ship or any waypoint, **Google Earth** deep link, and route links to the destination station. The embed is keyless, so the tracker works with no configuration and no Maps credential of any kind: nothing on the client needs a key, and the optional Maps JavaScript API upgrade would use a browser key restricted by referrer rather than a secret, read from a `VITE_*` variable that must never hold a server credential.
 - A built-in route chart drawn by the twin from the same geometry used for the position, so the ship marker cannot drift away from the numbers. Ice edge, graticule, waypoints, port and destination are all plotted and clickable.
 
 ### Field badge (gamification)
@@ -180,6 +180,21 @@ Two public legal documents, `/terms` and `/privacy`, linked from the landing foo
 
 - **Terms (`/terms`)** cover what DhruvaTwin is and is not, acceptance and eligibility, accounts and access, acceptable use, an explicit **assumption-of-risk** section stating that the platform must not be used for navigation, clearance, life-safety or any other professional decision and that simulated data, modelled voyages and AI output carry no operational guarantee, ownership of and responsibility for user content, the AI features and their limits, simulated and third-party data, intellectual property and no-endorsement, availability and offline losses, security and responsible disclosure, termination with survival, a **disclaimer and limitation of liability** including an aggregate cap for a free non-commercial prototype, **indemnity**, governing law with an informal resolution step before the Indian courts, and general provisions.
 - **Privacy (`/privacy`)** covers the controller, what is collected and explicitly what is not, how it is used, legal basis and consent including withdrawal, who it is shared with, an **AI processing** section describing exactly what leaves the deployment when the assistant or advisor is used, cookies and local storage, concrete retention rules, security and breach notification, international transfers, the rights of a data principal under the Digital Personal Data Protection Act 2023 including nomination and escalation to the Data Protection Board, children, and a grievance contact with a thirty day response commitment.
+
+### Public pages (landing and legal)
+
+- **The landing page is a poster.** The hero presents the project the way it was pitched: the team and programme chips across the top, the two-tone `DhruvaTwin` wordmark with an ice-to-orange gradient, and the identity table - PS ID, theme, category, project and stations - beside one hand-built SVG illustration carrying the whole idea. That illustration is drawn in code rather than shipped as a bitmap, so it stays sharp at any size, loads instantly, and cannot go missing: the satellite downlinking on a gradient beam, the station on its stilts with warm windows and the national flag, the operator's console with a station overview, a twin cutaway, a telemetry trace and system-health ring gauges, all under the aurora.
+- **Cute real penguins.** Adelie, emperor, chinstrap and gentoo are drawn as SVG mascots with the proportions the 3D twin uses and the markings that identify each species, then set bobbing out of phase: three of them stand on the ice in the poster itself, four more carry the field-population section with their identification marks, and two keep the legal pages human.
+- **The legal pages match the product.** `LegalShell` carries the same poster band, wordmark, programme chips and identity table, with the penguins tucked into the band, a sticky table of contents, a cross-link to the other document, and full contact and escalation details.
+
+### Security
+
+See `SECURITY.md` for the full model and the disclosure policy. The short version:
+
+- **No credential reaches the browser.** Every provider key is read from `process.env` inside a Convex `"use node"` action, so it exists only in the backend process. Nothing under `src/` reads a key, and the only Vite-exposed values are the deployment URL and the platform's public identifiers.
+- **Fail-safe AI.** With no key configured the assistant and the advisor answer from a deterministic rule engine over the same live data, and they report which engine answered, so a missing credential is visible rather than silent.
+- **Guard rail.** `bun run scan:secrets` scans the source tree for credential-shaped literals (Groq, OpenAI, Anthropic, Google, AWS, GitHub, Stripe and Slack key formats, private key blocks, bearer literals and assigned secret strings) and exits non-zero on a finding. `.gitignore` blocks every credential file shape, including `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx` and service-account file names.
+- **Codes not passwords.** Sign-in is by email one-time code, so there is no password hash to steal; protected routes sit behind an auth guard, mutations validate their arguments with Convex validators, and operational actions are written to a hash-chained audit log that detects editing, insertion or reordering.
 
 ### Command screens (20)
 
@@ -258,9 +273,9 @@ The platform seeds itself: opening the dashboard runs `bootstrap.ensureSeeded` o
 | Variable | Purpose |
 | --- | --- |
 | `GROQ_API_KEY` | Enables the station assistant and the AI advisor on `llama-3.3-70b-versatile`. Set it as a deployment secret in the project's Keys tab, never in the source. Without it the assistant answers from a deterministic local rule engine and a built-in polar reference set over the same live context, and the advisor produces its briefing from a deterministic rule engine over the same live inputs. The console states which engine answered, so a missing key is visible rather than silent. |
-| `VITE_GOOGLE_MAPS_API_KEY` | Optional. Upgrades the resupply screen from the keyless Google Maps embed to the Maps JavaScript API. |
+No key is required for Open-Meteo weather, the keyless Google Maps and Google Earth links, or the public HiveMQ broker. The supply-ship tracker uses the keyless Google Maps embed, so there is no browser-side map key in this project to leak; if a Maps JavaScript key is ever added it is a public key and must be restricted by HTTP referrer at Google before it is used.
 
-No key is required for Open-Meteo weather, the keyless Google Maps and Google Earth links, or the public HiveMQ broker.
+Nothing under `src/` reads a key. The only variables the browser sees are Vite's own `VITE_`-prefixed values, which are the Convex deployment URL and the platform's public app and monitoring identifiers.
 
 ## Demo flow for judges
 
@@ -290,7 +305,10 @@ No key is required for Open-Meteo weather, the keyless Google Maps and Google Ea
 ## Verification
 
 ```bash
-bun convex dev --once && bun tsc -b --noEmit
+bun convex dev --once && bun tsc -b --noEmit   # types and backend push
+bun run scan:secrets                            # no credential-shaped literal in the source tree
 ```
 
-Both commands pass on the current tree.
+All of these pass on the current tree. The secret scan reports one reviewed literal: the auth
+provider's shared one-time-code relay credential, which ships with the template and is a relay
+identity rather than a project secret.

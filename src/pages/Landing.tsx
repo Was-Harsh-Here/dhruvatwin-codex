@@ -6,6 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  AntarcticPoster,
+  BrandWordmark,
+  IdentityTable,
+} from "@/components/landing/AntarcticPoster";
+import { PenguinWaddle } from "@/components/landing/PenguinSvg";
 import { PROJECT_IDENTITY } from "@/lib/station";
 import { cn } from "@/lib/utils";
 import {
@@ -19,13 +25,16 @@ import {
   FileCheck2,
   GitBranchPlus,
   Globe2,
+  Fingerprint,
   Footprints,
+  KeyRound,
   Layers,
   PawPrint,
   PenSquare,
   Radio,
   Ship,
   Shield,
+  ShieldCheck,
   Snowflake,
   Sparkles,
   Tags,
@@ -173,47 +182,79 @@ export default function Landing() {
       {/* Hero */}
       <main className="relative z-10 flex-1">
         <div className="mx-auto w-full max-w-6xl px-4 pb-16 pt-10 sm:px-6 sm:pt-16">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="mx-auto max-w-3xl text-center"
-          >
-            <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
-              <Badge variant="outline" className="border-primary/40 text-primary">
-                PS {PROJECT_IDENTITY.psId}
-              </Badge>
-              <Badge variant="outline" className="border-border text-muted-foreground">
-                {PROJECT_IDENTITY.event}
-              </Badge>
-              <Badge variant="outline" className="border-border text-muted-foreground">
-                Theme: {PROJECT_IDENTITY.theme}
-              </Badge>
-            </div>
-            <h1 className="font-display text-4xl font-extrabold leading-tight tracking-tight text-foreground sm:text-6xl">
-              A living <span className="text-primary">digital twin</span> of India&apos;s{" "}
-              Antarctic stations
-            </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-              DhruvaTwin Platform mirrors Maitri and Bharati in software: separate 3D twins
-              with seven engineering view modes and a 2.5D cutaway, a live sensor grid,
-              automated alert triage, an AI continuity engine that predicts satellite
-              blackouts, Antarctic Mode for ground staff, and an offline-first MQTT link that
-              keeps reporting through a katabatic outage. Built for NCPOR, Ministry of Earth
-              Sciences, and the research community that depends on it.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <Button asChild size="lg" className="cursor-pointer">
-                <Link to={isAuthenticated ? "/dashboard" : "/auth?returnTo=%2Fdashboard"}>
-                  {isAuthenticated ? "Open Dashboard" : "Launch the Console"}
-                  <ArrowRight className="ml-2 size-4" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="cursor-pointer">
-                <Link to="/alerts">Preview Alert Triage</Link>
-              </Button>
-            </div>
-          </motion.div>
+          {/*
+            Poster hero.
+
+            The landing page opens the way the project was presented: the team
+            and the programme across the top, the wordmark and the identity
+            table on the left, and the poster illustration on the right - the
+            satellite downlinking to the station, the operator console, and the
+            penguins the twin models standing on the ice.
+          */}
+          <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-10">
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="border-[#F58220]/50 text-[#F58220]">
+                  Team {PROJECT_IDENTITY.team}
+                </Badge>
+                <Badge variant="outline" className="border-primary/40 text-primary">
+                  PS {PROJECT_IDENTITY.psId}
+                </Badge>
+                <Badge variant="outline" className="border-border text-muted-foreground">
+                  {PROJECT_IDENTITY.event}
+                </Badge>
+              </div>
+
+              <h1 className="mt-5">
+                <BrandWordmark className="block text-5xl sm:text-6xl lg:text-7xl" />
+                <span className="mt-3 block font-display text-lg font-bold leading-snug text-foreground sm:text-xl">
+                  AI and IoT powered, offline-first{" "}
+                  <span className="text-primary">digital twin</span> for Maitri and Bharati
+                </span>
+              </h1>
+
+              <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                A digital platform for the efficient remote management of the Indian Antarctic
+                research stations: two separate 3D twins with seven engineering view modes and a
+                2.5D cutaway, a live sensor grid, automated alert triage, a grounded AI advisor, an
+                AI continuity engine that predicts satellite blackouts, Antarctic Mode for ground
+                staff, and an offline-first MQTT link that keeps reporting through a katabatic
+                outage. Built for {PROJECT_IDENTITY.agency} and the research community that
+                depends on it.
+              </p>
+
+              <IdentityTable className="mt-6 max-w-md" />
+
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Button asChild size="lg" className="cursor-pointer">
+                  <Link to={isAuthenticated ? "/dashboard" : "/auth?returnTo=%2Fdashboard"}>
+                    {isAuthenticated ? "Open Dashboard" : "Launch the Console"}
+                    <ArrowRight className="ml-2 size-4" />
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="cursor-pointer">
+                  <Link to="/auth?returnTo=%2Fadvisor">See the AI Advisor</Link>
+                </Button>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.7, delay: 0.1 }}
+            >
+              <AntarcticPoster className="aspect-[760/480] w-full" />
+              <p className="mt-3 text-center text-[11px] leading-snug text-muted-foreground">
+                The station twin, the sensor grid and the field population in one frame: the same
+                satellite link, the same telemetry and the same penguins you will find modelled on
+                the Bharati coast inside the console.
+              </p>
+            </motion.div>
+          </div>
 
           <StationStrip />
 
@@ -362,6 +403,124 @@ export default function Landing() {
               </motion.div>
             ))}
           </div>
+
+          {/*
+            Security.
+
+            Judges ask where the keys live, so the answer is on the front page
+            rather than buried in a repository file: every provider key is read
+            server side, nothing in the browser bundle holds one, and the
+            repository ships a scanner that fails on a credential-shaped
+            literal.
+          */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.5 }}
+            className="mt-16"
+          >
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="cc-label">Security</div>
+                <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-foreground">
+                  No credential ever reaches the browser
+                </h2>
+              </div>
+              <span className="cc-mono rounded border border-border bg-card px-2.5 py-1 text-[10px] text-muted-foreground">
+                bun run scan:secrets
+              </span>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                {
+                  icon: ShieldCheck,
+                  title: "Keys stay server side",
+                  body: "Provider keys are read from the environment inside Convex Node actions, so they exist only in the backend process. Nothing under the client source reads a key, and the only Vite-exposed values are the deployment URL and the platform's own public identifiers.",
+                },
+                {
+                  icon: KeyRound,
+                  title: "Nothing to steal in the bundle",
+                  body: "Open the network tab and search the bundle: there is no key in it. The AI features also fail safe, answering from a deterministic rule engine over live data when no key is configured instead of calling out unauthenticated.",
+                },
+                {
+                  icon: Fingerprint,
+                  title: "Codes, not passwords",
+                  body: "Sign-in is by email one-time code, so there is no password hash to steal. Protected routes sit behind an auth guard, every mutation validates its arguments, and operational actions land in a hash-chained audit log that detects editing.",
+                },
+              ].map((item) => (
+                <Card key={item.title} className="cc-panel h-full border-border shadow-none">
+                  <CardContent className="p-5">
+                    <div className="flex size-9 items-center justify-center rounded-md border border-[#00E0C6]/30 bg-[#00E0C6]/10">
+                      <item.icon className="size-4 text-[#00E0C6]" />
+                    </div>
+                    <h3 className="mt-3 font-display text-sm font-bold uppercase tracking-wider text-foreground">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </motion.div>
+
+          {/*
+            Penguins.
+
+            The wildlife layer is one of the things people remember about the
+            twin, so the public page carries the mascots: the same four species
+            the twin models, drawn with the markings that identify them, and a
+            route straight into the field cards.
+          */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.5 }}
+            className="mt-16"
+          >
+            <Card className="cc-panel overflow-hidden border-border shadow-none">
+              <CardContent className="grid items-center gap-6 p-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-8">
+                <div>
+                  <div className="cc-label">Field population</div>
+                  <h2 className="mt-2 font-display text-2xl font-extrabold tracking-tight text-foreground">
+                    Four penguins, drawn the way the twin draws them
+                  </h2>
+                  <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                    Adelie, emperor, chinstrap and gentoo, each with the markings that identify it:
+                    the Adelie eye ring, the emperor neck patch, the chinstrap strap and the gentoo
+                    bonnet. They live on the Bharati coast in the twin, with chicks, a sighting log
+                    that writes to the station record, and Dev Khandhediya standing among them.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    {[
+                      "Adelie - white eye ring",
+                      "Emperor - orange neck patch",
+                      "Chinstrap - chin strap",
+                      "Gentoo - white bonnet",
+                    ].map((marking) => (
+                      <Badge
+                        key={marking}
+                        variant="outline"
+                        className="border-border text-[10px] text-muted-foreground"
+                      >
+                        {marking}
+                      </Badge>
+                    ))}
+                  </div>
+                  <Button asChild size="sm" className="mt-5 cursor-pointer">
+                    <Link to="/auth?returnTo=%2Ftwin">Meet them in the twin</Link>
+                  </Button>
+                </div>
+                <PenguinWaddle
+                  kinds={["adelie", "emperor", "chinstrap", "gentoo"]}
+                  chicks={2}
+                  penguinClassName="h-28 w-auto sm:h-36"
+                  className="gap-0 sm:gap-1"
+                />
+              </CardContent>
+            </Card>
+          </motion.div>
 
           {/* Identity strip */}
           <motion.div

@@ -28,6 +28,10 @@ export const PROJECT_IDENTITY = {
   team: "HackFinity007",
   psId: "26060",
   theme: "Smart Automation",
+  /** Programme category shown on the public poster. */
+  category: "Software",
+  /** Project title as submitted to the hackathon. */
+  project: "DhruvaTwin",
   event: "Smart India Hackathon 2026",
   agency: "NCPOR - National Centre for Polar and Ocean Research, MoES",
 } as const;

@@ -1405,7 +1405,7 @@ export default function Twin() {
               {togglesHint && (
                 <div className="pointer-events-none absolute left-1/2 top-14 -translate-x-1/2">
                   <span className="cc-mono rounded border border-[#00E0C6]/40 bg-[#060B14]/90 px-3 py-1.5 text-[10px] uppercase tracking-wider text-[#7DF3E4] backdrop-blur">
-                    {display.labels ? "labels on - press L to remove" : "labels off - press L to restore"}
+                    {display.labels ? "press L to hide every label - red cross removes one" : "labels off - press L to restore"}
                   </span>
                 </div>
               )}

@@ -8,7 +8,13 @@ import {
   type ReactNode,
 } from "react";
 import * as THREE from "three";
-import { toggleLabelPin, unpinLabel, useLabelPinned } from "../scene-labels";
+import {
+  dismissLabel,
+  pinLabel,
+  useHoverHold,
+  useLabelPinned,
+  useLabelSuppressed,
+} from "../scene-labels";
 import { Label3D, TWIN_COLORS } from "../twin-primitives";
 import { DOOR_H, SLAB_T, type DoorDef, type FloorFinish, type FloorPlan, type RoomDef } from "./plan-types";
 
@@ -242,20 +248,23 @@ export function Interactive({
   children: ReactNode;
 }) {
   const ctx = useInterior();
-  const [hovered, setHovered] = useState(false);
+  // Short hold in here: rooms are dense, so a long grace period would leave
+  // several name plates standing over the deck at once.
+  const { hovered, over, out } = useHoverHold(900);
   const pinId = `fixture:${ctx?.level ?? 0}:${ctx?.room ?? "deck"}:${label}`;
   const pinned = useLabelPinned(pinId);
+  const suppressed = useLabelSuppressed(pinId);
   return (
     <group
       position={position ?? [0, 0, 0]}
       rotation={rotation ?? [0, 0, 0]}
       onPointerOver={(e) => {
         e.stopPropagation();
-        setHovered(true);
+        over();
         if (ctx?.onInspect) document.body.style.cursor = "pointer";
       }}
       onPointerOut={() => {
-        setHovered(false);
+        out();
         document.body.style.cursor = "auto";
       }}
       onClick={(e) => {
@@ -268,13 +277,14 @@ export function Interactive({
           room: ctx.room,
           level: ctx.level,
         });
-        // Clicking a fixture also pins its name in the room, with a cross to
-        // take it back off, so the label is the operator's choice not a default.
-        toggleLabelPin(pinId);
+        // Clicking a fixture pins its name in the room. A pinned label shows
+        // a red cross that removes it again, so the label is the operator's
+        // choice rather than a default, and a click always brings it back.
+        pinLabel(pinId);
       }}
     >
       {children}
-      {(hovered || pinned) && (
+      {(hovered || pinned) && !suppressed && (
         <Label3D
           position={[0, labelHeight, 0]}
           border={INT.trim}
@@ -283,7 +293,7 @@ export function Interactive({
             { text: label, color: INT.trim },
             ...(tag ? [{ text: tag, color: "#8FA0B2" }] : []),
           ]}
-          onDismiss={pinned ? () => unpinLabel(pinId) : undefined}
+          onDismiss={() => dismissLabel(pinId)}
           requested={pinned}
         />
       )}
