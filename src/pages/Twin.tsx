@@ -45,6 +45,10 @@ import { WalkController } from "@/components/twin/interiors/WalkController";
 import { siteColliders, siteSpawn } from "@/components/twin/site-walk";
 import { FieldBadge } from "@/components/twin/FieldBadge";
 import {
+  clearPinnedLabels,
+  usePinnedLabelCount,
+} from "@/components/twin/scene-labels";
+import {
   award,
   fieldLevel,
   recordDistance,
@@ -97,6 +101,7 @@ import {
   Thermometer,
   TriangleAlert,
   Video,
+  X,
 } from "lucide-react";
 import {
   Component,
@@ -280,6 +285,8 @@ export default function Twin() {
   const [flyKey, setFlyKey] = useState(0);
   const [speciesId, setSpeciesId] = useState<string | null>(null);
   const display = useTwinDisplay();
+  /** Labels the operator pinned by clicking objects in the scene. */
+  const pinnedLabelCount = usePinnedLabelCount();
   const drone = useDroneTour(DRONE_TOURS[slug]);
 
   const time = useTimeOfDay(latitude);
@@ -559,6 +566,8 @@ export default function Twin() {
         setTwinDisplay({ labels: !getTwinDisplay().labels });
         setTogglesHint(true);
       }
+      // Esc also takes every label the operator pinned by clicking back off.
+      if (e.code === "Escape" && !locked) clearPinnedLabels();
       if (e.code === "Escape" && view === "interior" && deckView === "walk" && !locked) {
         leaveInterior();
       }
@@ -1169,6 +1178,16 @@ export default function Twin() {
                       >
                         <span className="text-xs">Place titles and telemetry strips</span>
                       </DropdownMenuCheckboxItem>
+                      <DropdownMenuItem
+                        disabled={pinnedLabelCount === 0}
+                        onSelect={() => clearPinnedLabels()}
+                      >
+                        <span className="text-xs">
+                          {pinnedLabelCount === 0
+                            ? "No clicked labels to remove"
+                            : `Remove ${pinnedLabelCount} clicked label${pinnedLabelCount === 1 ? "" : "s"}`}
+                        </span>
+                      </DropdownMenuItem>
                       <DropdownMenuCheckboxItem
                         checked={display.survey}
                         onCheckedChange={(value) => setTwinDisplay({ survey: Boolean(value) })}
@@ -1187,6 +1206,14 @@ export default function Twin() {
                       >
                         <span className="text-xs">Wildlife and expedition member</span>
                       </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={display.wildlifeLabels}
+                        onCheckedChange={(value) =>
+                          setTwinDisplay({ wildlifeLabels: Boolean(value) })
+                        }
+                      >
+                        <span className="text-xs">Species name labels</span>
+                      </DropdownMenuCheckboxItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onSelect={() =>
@@ -1196,6 +1223,7 @@ export default function Twin() {
                             survey: true,
                             hotspots: true,
                             wildlife: true,
+                            wildlifeLabels: true,
                           })
                         }
                       >
@@ -1246,6 +1274,18 @@ export default function Twin() {
                   >
                     labels {display.labels ? "on" : "off"}
                   </button>
+                  {/* Clicked labels: the count, and one click to clear them (Esc). */}
+                  {pinnedLabelCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => clearPinnedLabels()}
+                      title="Remove every label you opened by clicking (Esc)"
+                      className="cc-mono flex items-center gap-1.5 rounded border border-[#FFB020]/40 bg-[#060B14]/80 px-2.5 py-1 text-[10px] uppercase tracking-wider text-[#FFB020] backdrop-blur transition-colors hover:border-[#FFB020]/80"
+                    >
+                      <X className="size-3" />
+                      clear {pinnedLabelCount} label{pinnedLabelCount === 1 ? "" : "s"}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -1470,10 +1510,10 @@ export default function Twin() {
                     {underwater
                       ? `${submergedBody?.name}: seabed relief, boulders, fish, bubbles and the submerged intake line.`
                       : interior
-                        ? `Click any fixture inside the room to open its detail panel. ${plan?.rooms.length ?? 0} rooms on this deck.`
+                        ? `Click any fixture inside the room to open its detail panel and pin its label. ${plan?.rooms.length ?? 0} rooms on this deck.`
                         : view === "isometric"
                           ? "Terrain as flat tiles with each room extruded as a cutaway block and live data floating above it."
-                          : `${activeMode.hint} Free view: drag to orbit, right-drag to pan, scroll to zoom.`}
+                          : `${activeMode.hint} Nothing floats over the site by default: click an object to pin its label and the numbers behind it, then use the cross on the label or Esc to take it off. Free view: drag to orbit, right-drag to pan, scroll to zoom.`}
                   </p>
                 </div>
               )}

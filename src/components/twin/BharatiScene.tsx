@@ -8,6 +8,7 @@ import {
   Hotspot,
   Lighting,
   MAT,
+  readingRows,
   SiteSurvey,
   Snowfall,
   Stars,
@@ -599,7 +600,8 @@ export function BharatiScene({
       />
       <Stars count={1200} />
       <Aurora z={-240} scale={1.25} opacity={sun?.auroraOpacity ?? 0.32} />
-      <Snowfall count={6000} spread={360} />
+      {/* Tuned to the frame budget: see the note in the Maitri scene. */}
+      <Snowfall count={2400} spread={360} />
       <GroundShadow />
 
       <ContainerStation onInfo={() => onSelect("main-station")} />
@@ -643,10 +645,43 @@ export function BharatiScene({
       <NeighbourMarker position={[230, 0, -90]} name="ZHONGSHAN" />
 
       {/* Hotspots */}
-      <Hotspot position={[0, 14, 10]} label="main-station" onSelect={onSelect} active={activeHotspot === "main-station"} />
-      <Hotspot position={[34, 10, -20]} label="chp" onSelect={onSelect} active={activeHotspot === "chp"} />
-      <Hotspot position={[-44, 12, -12]} label="fuel" onSelect={onSelect} active={activeHotspot === "fuel"} />
-      <Hotspot position={[10, 9, 44]} label="seawater" onSelect={onSelect} active={activeHotspot === "seawater"} />
+      {/*
+        Hotspots. Clicking one selects the object and pins a label carrying the
+        live readings for that plant, so nothing floats over the site until the
+        operator asks for it.
+      */}
+      <Hotspot
+        position={[0, 14, 10]}
+        label="main-station"
+        title="Bharati container station"
+        detail={readingRows(["HAB-BHARATI", "AWS-BHARATI", "VSAT-BHARATI"], readings)}
+        onSelect={onSelect}
+        active={activeHotspot === "main-station"}
+      />
+      <Hotspot
+        position={[34, 10, -20]}
+        label="chp"
+        title="CHP plant"
+        detail={readingRows(["CHP-1", "CHP-2", "CHP-3"], readings)}
+        onSelect={onSelect}
+        active={activeHotspot === "chp"}
+      />
+      <Hotspot
+        position={[-44, 12, -12]}
+        label="fuel"
+        title="Fuel farm"
+        detail={readingRows(["FUEL-BHARATI"], readings)}
+        onSelect={onSelect}
+        active={activeHotspot === "fuel"}
+      />
+      <Hotspot
+        position={[10, 9, 44]}
+        label="seawater"
+        title="Seawater intake"
+        detail={readingRows(["SWPUMP-BHARATI"], readings)}
+        onSelect={onSelect}
+        active={activeHotspot === "seawater"}
+      />
       <Hotspot position={[-20, 8, 40]} label="wastewater" onSelect={onSelect} active={activeHotspot === "wastewater"} />
       <Hotspot position={[46, 7, 26]} label="laboratory" onSelect={onSelect} active={activeHotspot === "laboratory"} />
       <Hotspot position={[-12, 7, -52]} label="summer-camp" onSelect={onSelect} active={activeHotspot === "summer-camp"} />

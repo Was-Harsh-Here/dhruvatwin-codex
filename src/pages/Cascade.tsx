@@ -33,25 +33,44 @@ function minuteLabel(seconds: number): string {
   return `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
-/** Deterministic graph layout: tiers become columns, order within tier becomes rows. */
+/** Box geometry, shared by the layout, the swimlanes and the flow arrows. */
+const BOX_W = 184;
+const BOX_H = 52;
+/** Half the width of a tier swimlane, so lanes never touch. */
+const LANE_HALF = 105;
+/** Where the first tier column sits. */
+const FIRST_COLUMN_X = 130;
+const COLUMN_STEP = 210;
+
+/**
+ * Deterministic flowchart layout: tiers become swimlanes, order within a tier
+ * becomes rows. Every coordinate the flowchart draws comes from here, so the
+ * lanes, the boxes and the arrows can never drift apart.
+ */
 function layout(nodes: CascadeNode[]) {
   const tiers = [...new Set(nodes.map((node) => node.tier))].sort((a, b) => a - b);
-  const columnX = (tier: number) => 130 + tier * 210;
+  const columnX = (tier: number) => FIRST_COLUMN_X + tier * COLUMN_STEP;
   const maxRows = Math.max(
     ...tiers.map((tier) => nodes.filter((node) => node.tier === tier).length),
     1,
   );
   const rowGap = 78;
-  const height = Math.max(320, maxRows * rowGap + 90);
+  const height = Math.max(360, maxRows * rowGap + 110);
   const placed = new Map<string, { x: number; y: number }>();
   for (const tier of tiers) {
     const column = nodes.filter((node) => node.tier === tier);
     const offset = (maxRows - column.length) * (rowGap / 2);
     column.forEach((node, index) => {
-      placed.set(node.id, { x: columnX(tier), y: 70 + offset + index * rowGap });
+      placed.set(node.id, { x: columnX(tier), y: 80 + offset + index * rowGap });
     });
   }
-  return { placed, tiers, width: columnX(tiers[tiers.length - 1] ?? 0) + 150, height };
+  return {
+    placed,
+    tiers,
+    columns: tiers.map((tier) => ({ tier, x: columnX(tier) })),
+    width: columnX(tiers[tiers.length - 1] ?? 0) + 150,
+    height,
+  };
 }
 
 /** Cascade failure drill console. */
@@ -83,7 +102,16 @@ export default function Cascade() {
     () => simulateCascade({ nodes, triggerId, severity, isolations }),
     [nodes, triggerId, severity, isolations],
   );
-  const { placed, tiers, width, height } = useMemo(() => layout(nodes), [nodes]);
+  const { placed, columns, width, height } = useMemo(() => layout(nodes), [nodes]);
+
+  /** Position of a node in the propagation order, for the step badges. */
+  const stepOf = useMemo(() => {
+    const map = new Map<string, number>();
+    preview.impacts.forEach((impact, index) => map.set(impact.id, index + 1));
+    return map;
+  }, [preview.impacts]);
+
+  const impactedCount = preview.impacts.filter((impact) => impact.state === "impacted").length;
 
   const toggleIsolation = useCallback((id: string) => {
     setIsolations((current) =>
@@ -309,22 +337,62 @@ export default function Cascade() {
             }
           >
             <div className="overflow-x-auto">
-              <svg viewBox={`0 0 ${width} ${height}`} className="h-[420px] w-full min-w-[800px]">
-                {tiers.map((tier) => (
-                  <text
-                    key={tier}
-                    x={130 + tier * 210}
-                    y={26}
-                    textAnchor="middle"
-                    className="font-display"
-                    fontSize={11}
-                    fill="#6B7A8F"
-                    letterSpacing={1.4}
-                  >
-                    {TIER_LABELS[tier] ?? `Tier ${tier}`}
-                  </text>
+              <svg
+                viewBox={`0 0 ${width} ${height}`}
+                className="h-[500px] w-full min-w-[900px]"
+                role="img"
+                aria-label="Propagation flowchart"
+              >
+                <defs>
+                  {/* Flow arrows: the direction consequence travels. */}
+                  {[
+                    { id: "flow-live", fill: "#FFB020" },
+                    { id: "flow-iso", fill: "#00E0C6" },
+                    { id: "flow-idle", fill: "#33414F" },
+                  ].map((marker) => (
+                    <marker
+                      key={marker.id}
+                      id={marker.id}
+                      viewBox="0 0 10 10"
+                      refX="8.5"
+                      refY="5"
+                      markerWidth="5.5"
+                      markerHeight="5.5"
+                      orient="auto"
+                    >
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill={marker.fill} />
+                    </marker>
+                  ))}
+                </defs>
+
+                {/* Swimlanes: one band per dependency tier, left to right. */}
+                {columns.map(({ tier, x }) => (
+                  <g key={`lane-${tier}`}>
+                    <rect
+                      x={x - LANE_HALF}
+                      y={40}
+                      width={LANE_HALF * 2}
+                      height={height - 62}
+                      rx={12}
+                      fill={tier % 2 === 0 ? "rgba(12,20,29,0.6)" : "rgba(18,28,40,0.4)"}
+                      stroke="#1C2733"
+                      strokeWidth={1}
+                    />
+                    <text
+                      x={x}
+                      y={26}
+                      textAnchor="middle"
+                      className="font-display"
+                      fontSize={11}
+                      fill="#6B7A8F"
+                      letterSpacing={1.4}
+                    >
+                      {TIER_LABELS[tier] ?? `Tier ${tier}`}
+                    </text>
+                  </g>
                 ))}
 
+                {/* Flow arrows: parent to child, in the direction consequence moves. */}
                 {nodes.flatMap((node) =>
                   node.dependsOn.map((parentId) => {
                     const from = placed.get(parentId);
@@ -332,40 +400,75 @@ export default function Cascade() {
                     if (!from || !to) return null;
                     const onPath = pathEdges.has(`${parentId}->${node.id}`);
                     const isolatedEdge = isolations.includes(parentId);
+                    const marker = isolatedEdge
+                      ? "url(#flow-iso)"
+                      : onPath
+                        ? "url(#flow-live)"
+                        : "url(#flow-idle)";
                     return (
                       <line
                         key={`${parentId}-${node.id}`}
-                        x1={from.x + 92}
+                        x1={from.x + BOX_W / 2}
                         y1={from.y}
-                        x2={to.x - 92}
+                        x2={to.x - BOX_W / 2 - 2}
                         y2={to.y}
                         stroke={isolatedEdge ? "#00E0C6" : onPath ? "#FFB020" : "#2A3644"}
                         strokeWidth={onPath ? 2.2 : 1.4}
                         strokeDasharray={isolatedEdge ? "5 4" : undefined}
-                        opacity={onPath || isolatedEdge ? 0.95 : 0.55}
+                        opacity={onPath || isolatedEdge ? 0.95 : 0.5}
+                        markerEnd={marker}
                       />
                     );
                   }),
                 )}
 
+                {/*
+                  One box per system. Clicking a box makes it the system that
+                  shuts down, so the flowchart can be driven from either the
+                  dropdown or the diagram itself.
+                */}
                 {nodes.map((node) => {
                   const at = placed.get(node.id);
                   if (!at) return null;
                   const state = stateOf(node.id);
                   const impact = preview.impacts.find((entry) => entry.id === node.id);
                   const tone = toneFor(state, impact?.severity);
+                  const step = stepOf.get(node.id);
+                  const isTrigger = state === "trigger";
                   return (
-                    <g key={node.id} transform={`translate(${at.x}, ${at.y})`}>
+                    <g
+                      key={node.id}
+                      transform={`translate(${at.x}, ${at.y})`}
+                      className="cursor-pointer"
+                      onClick={() => setTriggerId(node.id)}
+                    >
+                      <title>
+                        {`${node.label} - click to shut this system down`}
+                      </title>
                       <rect
-                        x={-92}
-                        y={-26}
-                        width={184}
-                        height={52}
+                        x={-BOX_W / 2}
+                        y={-BOX_H / 2}
+                        width={BOX_W}
+                        height={BOX_H}
                         rx={6}
                         fill={tone.fill}
                         stroke={tone.stroke}
-                        strokeWidth={state === "trigger" ? 2.4 : 1.6}
+                        strokeWidth={isTrigger ? 2.6 : 1.6}
                       />
+                      {isTrigger && (
+                        <rect
+                          x={-BOX_W / 2 - 4}
+                          y={-BOX_H / 2 - 4}
+                          width={BOX_W + 8}
+                          height={BOX_H + 8}
+                          rx={9}
+                          fill="none"
+                          stroke={tone.stroke}
+                          strokeWidth={1}
+                          strokeDasharray="4 4"
+                          opacity={0.7}
+                        />
+                      )}
                       <text
                         x={0}
                         y={-6}
@@ -392,13 +495,51 @@ export default function Cascade() {
                           {impact.state === "isolated" ? " isolated" : ""}
                         </text>
                       )}
+                      {/* Step in the propagation order, so the flow reads as a sequence. */}
+                      {step !== undefined && !isTrigger && (
+                        <g transform="translate(-78, -14)">
+                          <circle r={9} fill={tone.stroke} opacity={0.24} />
+                          <text
+                            x={0}
+                            y={3.5}
+                            textAnchor="middle"
+                            fontSize={9.5}
+                            fill={tone.text}
+                            className="cc-mono"
+                          >
+                            {step}
+                          </text>
+                        </g>
+                      )}
                     </g>
                   );
                 })}
               </svg>
             </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <GitBranchPlus className="size-3 text-primary" />
+                Click any box to shut that system down
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-[#FFB020]" /> arrow carrying consequence
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-[#00E0C6]" /> arrow stopped by an isolation
+              </span>
+              <span className="cc-mono ml-auto">
+                {impactedCount} system{impactedCount === 1 ? "" : "s"} affected
+              </span>
+            </div>
+
             <p className="mt-3 rounded border border-border px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-              {preview.recommendation}
+              <span className="font-display text-[10px] uppercase tracking-wider text-foreground">
+                If {activeTrigger?.label ?? "the trigger"} shuts down
+              </span>
+              <br />
+              {impactedCount} system{impactedCount === 1 ? "" : "s"} are affected, {preview.isolated.length} of
+              them isolated by the plan{preview.crewRiskNode ? `, and ${preview.crewRiskNode} is crew-critical at T+${minuteLabel(preview.crewRiskSec ?? 0)}` : ", with no crew-critical node reached"}. {preview.recommendation}
             </p>
           </Panel>
         </div>

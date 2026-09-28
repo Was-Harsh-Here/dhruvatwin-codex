@@ -87,7 +87,9 @@ Applied to both twins through scene-graph material overrides so every mode works
 - **Survey layer.** A 20 m graticule with bold 100 m lines, 25/50/100/200 m range rings with distance labels, contour rings around each raised sector and a north rose, all switchable. Layer switches for labels, survey and hotspots live in the Layers menu and apply to the live scene without rebuilding it.
 - **Detailed station plot.** The mini-map graticule is drawn to scale with range rings, a north arrow, a 50 m scale bar, labelled water bodies and every plotted structure. Clicking a block opens its hotspot and flies the matching viewpoint; clicking a lake opens its water panel.
 - **Decluttered viewport.** Seven view modes, the camera presets and the layer switches live in three compact menus instead of open columns, the legend and context line share one block, and labels, survey and hotspot markers can each be turned off independently.
-- **Labels are removable, and off by default where they cluttered the view.** Ambient titles - the green telemetry strip over a station, the amber airlock marker, the neighbouring-station name, room name plates - sit behind a **Place titles and telemetry strips** switch that starts off, so the scene is clean on load and still in walk mode, where nothing floats over anything until the switch is on. Everything else (hover labels, object panels) is one key away: press `L` or the `labels on/off` chip to strip every floating label and put it back, and the interior view has a `Hide labels` button.
+- **Click for the label, cross to take it off.** Nothing floats over the site on its own. Click an object - a station, the generator hall, the CHP plant, the fuel farm, the seawater intake, the heated pipeline, any fixture inside a room - and its label appears where you clicked, carrying the live readings behind it, with a cross drawn at the top right of the label that removes that one label. Clicking the same object again toggles it off. `Esc` clears everything you opened, and a `clear N labels` chip in the scene toolbar does the same in one click, so the count of what is pinned is always visible.
+- **Ambient titles are still available, but only on request.** The green telemetry strip, the amber airlock marker, the neighbouring-station nameplate and the room name plates sit behind a **Place titles and telemetry strips** switch that starts off, and while walking nothing floats over anything until that switch is on. `L` or the `labels on/off` chip strips every floating label and puts it back, the Layers menu has a **Remove N clicked labels** entry, and the interior view has a `Hide labels` button.
+- **Species labels have their own switch.** The field card carries a **Name labels over the ice** toggle, so penguin, seal and whale names can be taken off the scene while the facts stay in the card; the Layers menu carries the same switch as **Species name labels**.
 - **Walk the site on foot.** The exterior has a **Walk the site** button as well as orbit: click the canvas for pointer lock, then WASD to walk the apron, Shift to sprint, Space to jump, mouse to look. The hull, fuel farm and summer camp block you out, the fjord and the oasis lake fence you off so nobody walks on water, a boundary keeps a walk on the map, and the amber airlock marker still drops you inside. Distance walked counts towards the field badge.
 
 ### Navigation and time
@@ -126,13 +128,15 @@ A separate interface, not a theme. Pure black background, pure white text, 4 pix
 - IndexedDB outbox with priority classes **SOS 1, Critical 2, Check-in 3, Routine 4**, replayed highest-priority-first when the link returns
 - A sync indicator in the top bar reports broker state, online/offline and the pending count
 
-### Cascade drill (failure propagation)
+### Cascade drill (failure propagation, drawn as a flowchart)
 
 One equipment trigger propagates through the station's real dependency graph, and the operator's isolation plan changes the outcome rather than the wording around it.
 
 - Each station has its own graph: Maitri runs from the fuel farm through four 62.5 kVA generators, the PDU, the critical bus, the thermal plant, the heated lake pipeline, the habitat envelope, VSAT, the AWS and detection; Bharati runs from 13 fuel tanks through three CHP units, the distribution grid, the emergency bus, the thermal loop, the 450 m seawater intake, the desalination and wastewater plants, the container envelope, the laboratory and detection.
 - Nodes carry redundancy (none, N+1, dual), a consequence weight and a real isolation time. Redundancy attenuates propagation; isolation stops it.
-- The screen draws the graph by tier, colours every node by state, highlights the propagation path, and lists the timeline with time to impact, probability, path and the isolation procedure for each node.
+- **A flowchart, not a scatter.** Each dependency tier is a swimlane, so the diagram reads left to right in the order consequence actually travels: utilities, prime movers, distribution, critical loads, crew loads. Every edge carries an arrowhead pointing downstream, coloured amber while it is carrying consequence and cyan where an isolation has stopped it, and each affected box is numbered in propagation order.
+- **Drive it from the diagram.** Click any box to shut that system down and the whole chart recomputes: the state colours, the highlighted flow path, the numbered order, the response window and the resilience index. The dropdown and the diagram are two ways into the same drill, and the summary line under the chart states plainly what is affected - how many systems, how many isolated by the plan, and which node is crew-critical and when.
+- The screen colours every node by state, highlights the propagation path, and lists the timeline with time to impact, probability, path and the isolation procedure for each node.
 - Outputs: nodes reached, response window in minutes, crew-risk node, resilience index, and a recommendation naming the node to protect first.
 - Every drill is stored with the full propagation and appended to the audit chain, and a drill at warning or above raises the crew-risk node as a real incident in triage.
 
@@ -147,10 +151,16 @@ One equipment trigger propagates through the station's real dependency graph, an
 - A **scrub interval planner** computes the upsets expected between passes, the double-bit risk and the recommended maximum scrub interval, then passes or fails the configured interval against it.
 - Verdicts can be recorded to the station record and the audit chain.
 
-### Resupply voyage tracker (Google Maps and Google Earth)
+### Live supply-ship tracker (Google Maps and Google Earth)
+
+The user asked for a live map that tracks the cargo supply ship. The tracker is built the honest way for a station with no AIS feed: the vessel's own route, service speed and contingency are the model, and every number on the screen is computed from that one clock, so nothing can disagree with anything else.
 
 - Three modelled voyages: the Cape Town to Bharati relief, the Cape Town to Maitri relief and the inter-station Bharati to Maitri leg, from real route geometry with waypoints, notes and discharge plans.
-- Live position, course and compass, distance run and remaining in nautical miles and kilometres, day of voyage, schedule margin, ice state against the plotted ice edge, planned arrival and passage progress, all computed from the route, the speed and the time.
+- **Live clock.** The board refreshes on a five second tick, the header carries a pulsing **LIVE** badge with the seconds since the last update, and the ship marker on the chart pulses with it, so the screen reads as a live instrument rather than a static report.
+- **Track that shows where the ship is.** The chart draws the passage already run in bright cyan and the passage still to run as a dim dashed line, with the ship on the seam between them: the distance run, the remaining distance, the countdown to arrival and the noon reports all come off that same seam.
+- **Live position, course and compass**, distance run and remaining in nautical miles and kilometres, day of voyage, schedule margin, ice state against the plotted ice edge, planned arrival, a live countdown to arrival and passage progress, all computed from the route, the speed and the time.
+- **Map that follows the ship.** The satellite embed stays anchored on the vessel and re-anchors every ninety seconds, so the position keeps moving without the frame reloading on every tick. Centring on Cape Town, on the destination or on any waypoint takes the map off follow, and **Follow the ship** puts it back.
+- **Scrub the passage.** The timeline slider moves the single clock the whole page is built from, with departure, mid-passage, arrival and jump-to-now preset buttons. Scrub it and the position, distance run, sea state, noon reports and countdown all follow together, which is how the discharge window at the station can be checked before the ship is there.
 - Noon reports with position, distance run, average speed, wind, swell and air temperature, with the ice-edge crossing marked.
 - Cargo manifest and vessel particulars for the modelled charter vessel.
 - **Google Maps** satellite embed centred on the ship or any waypoint, **Google Earth** deep link, and route links to the destination station. The embed is keyless, so the tracker works with no configuration; adding `VITE_GOOGLE_MAPS_API_KEY` upgrades it to the Maps JavaScript API.
@@ -160,7 +170,7 @@ One equipment trigger propagates through the station's real dependency graph, an
 
 The twin keeps a progression layer over everything you do in it, stored in local storage so it survives a reload and works offline.
 
-- **Eighteen badges in four tracks**: Explorer (walk 100 m and 500 m outside, stand in ten and twenty-five rooms, visit both stations, use teleport, step inside), Naturalist (open five species cards, record a sighting, stand with Dev outside, find him at his admin desk), Operator (watch three drone tour stops, open the 2.5D cutaway, open the resupply tracker, flush the offline queue) and Resilience (run a cascade drill, apply a repair, run the FPGA self-test).
+- **Nineteen badges in four tracks**: Explorer (walk 100 m and 500 m outside, stand in ten and twenty-five rooms, visit both stations, use teleport, step inside), Naturalist (open five species cards, record a sighting, stand with Dev outside, find him at his admin desk), Operator (watch three drone tour stops, open the 2.5D cutaway, open the resupply tracker, flush the offline queue) and Resilience (run a cascade drill, apply a repair, run the FPGA self-test, generate an advisor briefing).
 - **Experience, levels and a progress bar** are shown in the Field badge card in the twin's right rail, with the locked badges still stating what they ask for, so the list doubles as a list of things to go and do. Winning a badge raises a toast with its XP.
 - A reset button clears progress for a clean demo.
 
@@ -168,9 +178,9 @@ The twin keeps a progression layer over everything you do in it, stored in local
 
 Two public legal documents, `/terms` and `/privacy`, written against what the platform actually does: what DhruvaTwin is and is not (a prototype with simulated data, not an operational system), acceptable use, the third parties it talks to, what is collected and why, retention, and the rights a user has. They are linked from the landing footer and from every signed-in footer.
 
-### Command screens (19)
+### Command screens (20)
 
-Sensor Dashboard, Alert Triage and Incident Matrix, Station Dashboard with personnel roster, Microgrid and CHP Command, Local Environment with the ice velocity map, Digital Twin 3D, Antarctica Overview, Weather Extension, Antarctic Mode, Cascade Drill, Repair Bay, Resupply Voyage, NCPOR Library, NPDC Compliance Centre, Expedition Logs, Audit Trail, Equipment Catalog, Workspace and Admin Console.
+Sensor Dashboard, Alert Triage and Incident Matrix, Station Dashboard with personnel roster, Microgrid and CHP Command, Local Environment with the ice velocity map, Digital Twin 3D, Antarctica Overview, Weather Extension, Antarctic Mode, AI Advisor, Cascade Drill, Repair Bay, Resupply Voyage, NCPOR Library, NPDC Compliance Centre, Expedition Logs, Audit Trail, Equipment Catalog, Workspace and Admin Console.
 
 ### Weather extension
 
@@ -183,6 +193,17 @@ A Groq-powered assistant using `llama-3.3-70b-versatile`, with live station cont
 - **General questions are answered too.** The assistant decides what a question needs: operational questions are grounded in live context and never invent sensor values; general questions (polar science, engineering, history, definitions, writing help) are answered properly from the model's own knowledge; mixed questions get both parts. Station context is supplied, not forced into unrelated answers.
 - **Responsiveness.** Greetings, identity, console how-to and topic help are answered locally in the same tick with no round trip. A server answer types itself out at reading speed instead of painting in one block, the wait shows staged status text, and every answer is stamped with its model and elapsed time. Ctrl/Cmd + K opens the dock, Escape closes it, and the last answer can be copied or the last question retried in one click.
 - **Offline.** Without a Groq key a deterministic rule engine answers over the same live context, backed by a built-in polar reference set covering the Antarctic Treaty, katabatic wind, TMR and single-event upsets, polar water systems, NPDC metadata, generator maintenance, sea ice and the station history.
+
+### AI station advisor
+
+The assistant answers what you ask. The advisor decides what you should be told, which is a different job and gets its own screen at `/advisor`.
+
+- **Grounded, not guessed.** The advisor action reads live telemetry, the open incident list for that station, the continuity prediction, the generation snapshot, local weather, the recent channel repairs, the FPGA self-test verdicts and the station's own dependency graph. Nothing in a briefing comes from outside that context, and the evidence panel lists the exact facts each conclusion rests on.
+- **Ranked output, not prose.** A headline, a risk level, then between three and six actions each with the reading or dependency behind it, who owns it and the window it fits in, plus a watch list and the evidence list.
+- **Six focus areas**: daily briefing, power and heat, the water path, connectivity, the sea lift and field safety. Changing the focus regenerates the briefing for that subject, and arrival on the screen produces one automatically so it is never an empty form.
+- **Real analysis, not a prompt.** The worst three channels out of band become the first actions; generation under fifteen percent headroom raises a reserve action rather than a note; a continuity drop inside two hours raises the fallback-profile and outbox actions; the dependency graph is searched for the widest single-point shutdown and the drill slot is pointed at it; the repair log is scanned for the channel that keeps coming back; and the sea lift line is computed from the same voyage model the tracker draws.
+- **Follow-up questions** go to the same assistant with the same live context, so anything the briefing raised can be interrogated in place.
+- **Two engines, one shape.** With `GROQ_API_KEY` the briefing is written by `llama-3.3-70b-versatile` in JSON mode against a live context block and validated before it reaches the screen, with the deterministic findings kept as the evidence list. Without a key the same briefing is produced by the rule engine, so the screen always works offline.
 
 ### NPDC metadata and roles
 
@@ -212,6 +233,7 @@ A Groq-powered assistant using `llama-3.3-70b-versatile`, with live station cont
 | `repairs.ts` | Telemetry repair procedures, repair log, FPGA self-test recording |
 | `wildlife.ts` | Species sighting log per station, census and per-species totals read by the twin's species cards |
 | `assistant.ts` | Groq station assistant with live context injection and general knowledge |
+| `advisor.ts` | Grounded station briefings: ranked actions, owners, windows, watch list and the evidence behind each line, written by llama-3.3-70b over live context or by a deterministic rule engine |
 | `seed.ts` | Idempotent seeding of stations, telemetry, rosters, plant history, passes, library, expeditions and the audit chain |
 | `crons.ts` | Ten second sensor tick and sixty second operations tick |
 
@@ -230,7 +252,7 @@ The platform seeds itself: opening the dashboard runs `bootstrap.ensureSeeded` o
 
 | Variable | Purpose |
 | --- | --- |
-| `GROQ_API_KEY` | Enables the station assistant on `llama-3.3-70b-versatile`. Without it the assistant answers from a deterministic local rule engine and a built-in polar reference set over the same live context. |
+| `GROQ_API_KEY` | Enables the station assistant and the AI advisor on `llama-3.3-70b-versatile`. Without it the assistant answers from a deterministic local rule engine and a built-in polar reference set over the same live context, and the advisor produces its briefing from a deterministic rule engine over the same live inputs. |
 | `VITE_GOOGLE_MAPS_API_KEY` | Optional. Upgrades the resupply screen from the keyless Google Maps embed to the Maps JavaScript API. |
 
 No key is required for Open-Meteo weather, the keyless Google Maps and Google Earth links, or the public HiveMQ broker.
@@ -256,7 +278,9 @@ No key is required for Open-Meteo weather, the keyless Google Maps and Google Ea
 17. **Wildlife and the expedition member** - in the twin, click the Adelie colony for its species card, record a sighting, then press **Go to his desk inside** to land in the command room facing Dev Khandhediya at his admin desk, and click the desk to open the same card indoors.
 18. **Walk the site and the field badge** - back outside, press **Walk the site**, click the canvas and walk the apron; then open the Field badge card in the right rail to show the level, the XP bar and the badge just won.
 19. **Station assistant** - press Ctrl/Cmd + K, ask an operational question, then ask a general one to show it answers both.
-20. **Role views** - switch between Admin, Commander, Scientist and Station to show navigation and action gating.
+20. **AI Advisor** - open `/advisor`, let it write the daily briefing on arrival, read the ranked actions with their owners and windows, then switch the focus to the water path and to the sea lift to show the same live data producing a different briefing.
+21. **Click-to-label** - in the twin, click the generator hall: the label appears with the live readings and a cross to remove it; click a second object, then press Esc to clear them all and show the site is clean again.
+22. **Role views** - switch between Admin, Commander, Scientist and Station to show navigation and action gating.
 
 ## Verification
 

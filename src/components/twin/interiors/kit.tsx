@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import * as THREE from "three";
+import { toggleLabelPin, unpinLabel, useLabelPinned } from "../scene-labels";
 import { Label3D, TWIN_COLORS } from "../twin-primitives";
 import { DOOR_H, SLAB_T, type DoorDef, type FloorFinish, type FloorPlan, type RoomDef } from "./plan-types";
 
@@ -242,6 +243,8 @@ export function Interactive({
 }) {
   const ctx = useInterior();
   const [hovered, setHovered] = useState(false);
+  const pinId = `fixture:${ctx?.level ?? 0}:${ctx?.room ?? "deck"}:${label}`;
+  const pinned = useLabelPinned(pinId);
   return (
     <group
       position={position ?? [0, 0, 0]}
@@ -265,15 +268,23 @@ export function Interactive({
           room: ctx.room,
           level: ctx.level,
         });
+        // Clicking a fixture also pins its name in the room, with a cross to
+        // take it back off, so the label is the operator's choice not a default.
+        toggleLabelPin(pinId);
       }}
     >
       {children}
-      {hovered && (
+      {(hovered || pinned) && (
         <Label3D
           position={[0, labelHeight, 0]}
           border={INT.trim}
           px={0.11}
-          rows={[{ text: label, color: INT.trim }]}
+          rows={[
+            { text: label, color: INT.trim },
+            ...(tag ? [{ text: tag, color: "#8FA0B2" }] : []),
+          ]}
+          onDismiss={pinned ? () => unpinLabel(pinId) : undefined}
+          requested={pinned}
         />
       )}
     </group>

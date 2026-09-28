@@ -27,6 +27,8 @@ import {
   Ship,
   Shield,
   Snowflake,
+  Sparkles,
+  Tags,
   Thermometer,
   Truck,
   Users,
@@ -236,7 +238,7 @@ export default function Landing() {
               {
                 icon: Footprints,
                 title: "Walk the site and earn the badge",
-                body: "Leave the orbit camera and walk the apron on foot: WASD, mouse look, sprint and jump, with the hull, the fuel farm and the water edge keeping you honest. Eighteen field badges track what you actually did - distance walked, rooms stood in, species carded, drills run - and the level and XP bar sit in the twin's right rail.",
+                body: "Leave the orbit camera and walk the apron on foot: WASD, mouse look, sprint and jump, with the hull, the fuel farm and the water edge keeping you honest. Nineteen field badges track what you actually did - distance walked, rooms stood in, species carded, drills run - and the level and XP bar sit in the twin's right rail.",
               },
               {
                 icon: PawPrint,
@@ -244,9 +246,19 @@ export default function Landing() {
                 body: "Twenty-two species modelled honestly on the ice: four kinds of penguin with fluffy chicks, three seals, three whales, dolphins, terns and petrels, toothfish, krill swarms and seafloor sea spiders. Click any group for its field entry, record a sighting to the station log, or follow Dev Khandhediya from the Ad\u00e9lie colony to his admin desk inside the command room.",
               },
               {
+                icon: Tags,
+                title: "Click for the label, cross to take it off",
+                body: "Nothing floats over the site on its own any more. Click an object and its label appears with the live readings behind it and a cross to remove it, so the numbers arrive on request instead of covering the ice. Species name labels have their own switch in the field card, and Esc clears everything you opened.",
+              },
+              {
                 icon: GitBranchPlus,
-                title: "Cascade failure drill",
-                body: "Propagate one equipment failure through the real station dependency graph, apply your isolation plan and watch the response window, crew-risk node and resilience index recompute before recording the drill.",
+                title: "Cascade flowchart",
+                body: "Propagate one equipment failure through the real station dependency graph as a flowchart: tier swimlanes, arrows that show which way consequence travels, numbered propagation order, and a box you can click to shut that system down. Then apply your isolation plan and watch the response window, crew-risk node and resilience index recompute.",
+              },
+              {
+                icon: Sparkles,
+                title: "AI station advisor",
+                body: "Not a chat box: the advisor reads live telemetry, open incidents, the continuity prediction, the generation snapshot, the repair history and the station dependency graph, then returns ranked actions with an owner and a time window, a watch list, and the exact evidence behind every line.",
               },
               {
                 icon: Wrench,
@@ -255,8 +267,8 @@ export default function Landing() {
               },
               {
                 icon: Ship,
-                title: "Resupply voyage tracker",
-                body: "The sea lift from Cape Town to Bharati or Maitri: live position, noon reports, cargo and sea state on a chart drawn by the twin, with Google Maps satellite view and Google Earth links one click away.",
+                title: "Live supply-ship tracker",
+                body: "Follow the sea lift from Cape Town to Bharati or Maitri as it happens: a pulsing live position, the run drawn bright and the remaining passage dashed, a noon report for every day at sea, a satellite map that follows the ship, and a timeline you can scrub to check the discharge window before the ship is there.",
               },
               {
                 icon: Cpu,

@@ -8,6 +8,7 @@ import {
   Hotspot,
   Lighting,
   MAT,
+  readingRows,
   SiteSurvey,
   Snowfall,
   Stars,
@@ -532,7 +533,12 @@ export function MaitriScene({
       />
       <Stars count={800} />
       <Aurora z={-240} opacity={sun?.auroraOpacity ?? 0.32} />
-      <Snowfall count={5000} spread={320} />
+      {/*
+        Snow density is tuned to the frame budget: every flake is a per-frame
+        position write in JavaScript, and past about two and a half thousand
+        the extra flakes are indistinguishable at camera distance.
+      */}
+      <Snowfall count={2400} spread={320} />
       <GroundShadow />
 
       <MainStation onInfo={() => onSelect("main-station")} />
@@ -587,11 +593,44 @@ export function MaitriScene({
       </group>
 
       {/* Hotspots */}
-      <Hotspot position={[0, 12, 0]} label="main-station" onSelect={onSelect} active={activeHotspot === "main-station"} />
+      {/*
+        Hotspots. Clicking one selects the object and pins a label carrying the
+        live readings for that plant, so the numbers appear on demand instead of
+        sitting over the site permanently.
+      */}
+      <Hotspot
+        position={[0, 12, 0]}
+        label="main-station"
+        title="Maitri main building"
+        detail={readingRows(["HAB-MAITRI", "AWS-MAITRI", "VSAT-MAITRI"], readings)}
+        onSelect={onSelect}
+        active={activeHotspot === "main-station"}
+      />
       <Hotspot position={[-58, 7, 36]} label="lake" onSelect={onSelect} active={activeHotspot === "lake"} />
-      <Hotspot position={[-19, 5, 22]} label="pipeline" onSelect={onSelect} active={activeHotspot === "pipeline"} />
-      <Hotspot position={[42, 12, 30]} label="fuel" onSelect={onSelect} active={activeHotspot === "fuel"} />
-      <Hotspot position={[16, 7, -26]} label="generators" onSelect={onSelect} active={activeHotspot === "generators"} />
+      <Hotspot
+        position={[-19, 5, 22]}
+        label="pipeline"
+        title="Heated lake pipeline"
+        detail={readingRows(["PIPE-MAITRI"], readings)}
+        onSelect={onSelect}
+        active={activeHotspot === "pipeline"}
+      />
+      <Hotspot
+        position={[42, 12, 30]}
+        label="fuel"
+        title="Fuel farm"
+        detail={readingRows(["FUEL-MAITRI"], readings)}
+        onSelect={onSelect}
+        active={activeHotspot === "fuel"}
+      />
+      <Hotspot
+        position={[16, 7, -26]}
+        label="generators"
+        title="Generator hall"
+        detail={readingRows(["GEN-1", "GEN-2", "GEN-3"], readings)}
+        onSelect={onSelect}
+        active={activeHotspot === "generators"}
+      />
       <Hotspot position={[-8, 19, -30]} label="weather" onSelect={onSelect} active={activeHotspot === "weather"} />
       <Hotspot position={[-44, 7, -12]} label="summer-camp" onSelect={onSelect} active={activeHotspot === "summer-camp"} />
       <Hotspot position={[62, 7, 18]} label="vehicle-fleet" onSelect={onSelect} active={activeHotspot === "vehicle-fleet"} />

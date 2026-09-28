@@ -1,5 +1,10 @@
-import { ContactShadows, OrbitControls } from "@react-three/drei";
+import { Billboard, ContactShadows, OrbitControls } from "@react-three/drei";
 
+import {
+  toggleLabelPin,
+  unpinLabel,
+  useLabelPinned,
+} from "./scene-labels";
 import type { SensorSummary } from "./types";
 
 export type { SensorSummary, TwinHotspotDef, TwinSceneProps } from "./types";
@@ -234,6 +239,12 @@ export interface TwinDisplayState {
   hotspots: boolean;
   /** Antarctic wildlife, colonies and the expedition member on site. */
   wildlife: boolean;
+  /**
+   * Wildlife name labels. Species facts are shown on screen, and this is the
+   * switch that takes the floating names back off the scene, so the operator
+   * chooses how much of the animal information is drawn over the ice.
+   */
+  wildlifeLabels: boolean;
   /** Set while pointer lock is held, i.e. while the operator is walking. */
   walkMode: boolean;
   /**
@@ -250,6 +261,7 @@ let displayState: TwinDisplayState = {
   survey: true,
   hotspots: true,
   wildlife: true,
+  wildlifeLabels: true,
   walkMode: false,
   deckPlan: false,
 };
@@ -269,6 +281,7 @@ export function setTwinDisplay(patch: Partial<TwinDisplayState>): void {
     next.survey === displayState.survey &&
     next.hotspots === displayState.hotspots &&
     next.wildlife === displayState.wildlife &&
+    next.wildlifeLabels === displayState.wildlifeLabels &&
     next.walkMode === displayState.walkMode &&
     next.deckPlan === displayState.deckPlan
   ) {
@@ -294,65 +307,132 @@ export function useTwinDisplay(): TwinDisplayState {
 /* Hotspots                                                            */
 /* ------------------------------------------------------------------ */
 
-/** Clickable equipment hotspot marker floating above an object. */
+/** Short uppercase tags that read better shouted than title-cased. */
+const ACRONYMS = new Set([
+  "chp",
+  "gen",
+  "aws",
+  "vsat",
+  "ups",
+  "mep",
+  "ro",
+  "pp",
+  "dc",
+  "ac",
+  "rf",
+  "hvac",
+]);
+
+/** "main-station" becomes "Main Station", "chp" becomes "CHP". */
+export function objectTitle(id: string): string {
+  return id
+    .split("-")
+    .map((part) =>
+      ACRONYMS.has(part.toLowerCase())
+        ? part.toUpperCase()
+        : part.charAt(0).toUpperCase() + part.slice(1),
+    )
+    .join(" ");
+}
+
+/**
+ * Clickable equipment hotspot marker floating above an object.
+ *
+ * Clicking selects the object and pins its label. The label is the only thing
+ * this marker ever draws beyond the sphere itself: nothing floats over the
+ * site until the operator asks for it, either by clicking the object, which
+ * pins a single label with its own cross to remove it, or with the Titles
+ * layer switch, which turns the whole ambient set on.
+ */
 export function Hotspot({
   position,
   label,
   onSelect,
   active,
+  title,
+  detail,
 }: {
   position: [number, number, number];
   label: string;
   onSelect: (label: string) => void;
   active?: boolean;
+  /** Human heading for the pinned label. Defaults to the object id. */
+  title?: string;
+  /** Extra rows under the heading, typically live readings for the object. */
+  detail?: LabelRow[];
 }) {
   const [hovered, setHovered] = useState(false);
   const display = useTwinDisplay();
   const ref = useRef<THREE.Group>(null);
+  const pinId = `hotspot:${label}`;
+  const pinned = useLabelPinned(pinId);
   useFrame(({ clock }) => {
     if (ref.current) {
       ref.current.position.y = position[1] + Math.sin(clock.elapsedTime * 2) * 0.25;
     }
   });
   if (!display.hotspots) return null;
+  const showLabel = pinned || display.titles;
   return (
-    <group
-      ref={ref}
-      position={position}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(label);
-      }}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        setHovered(true);
-        document.body.style.cursor = "pointer";
-      }}
-      onPointerOut={() => {
-        setHovered(false);
-        document.body.style.cursor = "auto";
-      }}
-    >
-      <mesh>
-        <sphereGeometry args={hovered || active ? [1.15, 16, 16] : [0.85, 16, 16]} />
-        <meshStandardMaterial
-          color={active ? TWIN_COLORS.red : TWIN_COLORS.cyan}
-          emissive={active ? TWIN_COLORS.red : TWIN_COLORS.cyan}
-          emissiveIntensity={1.6}
-        />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.6, 0]}>
-        <ringGeometry args={[1.4, 1.8, 24]} />
-        <meshStandardMaterial
-          color={active ? TWIN_COLORS.red : TWIN_COLORS.cyan}
-          emissive={active ? TWIN_COLORS.red : TWIN_COLORS.cyan}
-          emissiveIntensity={0.8}
-          transparent
-          opacity={0.5}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-    </group>
+    <>
+      <group
+        ref={ref}
+        position={position}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(label);
+          toggleLabelPin(pinId);
+        }}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = "auto";
+        }}
+      >
+        <mesh>
+          <sphereGeometry args={hovered || active || pinned ? [1.15, 16, 16] : [0.85, 16, 16]} />
+          <meshStandardMaterial
+            color={active ? TWIN_COLORS.red : TWIN_COLORS.cyan}
+            emissive={active ? TWIN_COLORS.red : TWIN_COLORS.cyan}
+            emissiveIntensity={1.6}
+          />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.6, 0]}>
+          <ringGeometry args={[1.4, 1.8, 24]} />
+          <meshStandardMaterial
+            color={active ? TWIN_COLORS.red : TWIN_COLORS.cyan}
+            emissive={active ? TWIN_COLORS.red : TWIN_COLORS.cyan}
+            emissiveIntensity={0.8}
+            transparent
+            opacity={0.5}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      </group>
+      {showLabel && (
+        <group position={position}>
+          <Label3D
+            position={[0, 3.6, 0]}
+            px={0.11}
+            border={active ? TWIN_COLORS.red : TWIN_COLORS.cyan}
+            rows={[
+              {
+                text: (title ?? objectTitle(label)).toUpperCase(),
+                color: active ? TWIN_COLORS.red : TWIN_COLORS.cyan,
+              },
+              ...(detail ?? []),
+              ...(pinned ? [{ text: "cross to remove", color: "#6B7A8F" }] : []),
+            ]}
+            onDismiss={pinned ? () => unpinLabel(pinId) : undefined}
+            requested={pinned}
+          />
+        </group>
+      )}
+    </>
   );
 }
 
@@ -679,16 +759,23 @@ export function BuildingEntrance({
           side={THREE.DoubleSide}
         />
       </mesh>
-      <Label3D
-        position={[0, 2.9, 0]}
-        border={TWIN_COLORS.amber}
-        px={0.13}
-        ambient
-        rows={[
-          { text: label, color: TWIN_COLORS.amber },
-          { text: hovered ? "CLICK TO ENTER" : "INTERIOR ACCESS", color: "#E8EEF4" },
-        ]}
-      />
+      {/*
+        The airlock nameplate is drawn on hover only. It used to sit over the
+        site permanently and covered the telemetry strip behind it, so it is
+        now part of the same rule as every other label: nothing floats until
+        the operator asks for it.
+      */}
+      {hovered && (
+        <Label3D
+          position={[0, 2.9, 0]}
+          border={TWIN_COLORS.amber}
+          px={0.13}
+          rows={[
+            { text: label.toUpperCase(), color: TWIN_COLORS.amber },
+            { text: "CLICK TO ENTER", color: "#E8EEF4" },
+          ]}
+        />
+      )}
     </group>
   );
 }
@@ -907,6 +994,39 @@ function labelTexture(rows: LabelRow[], border: string) {
  * reads at a given camera distance. Labels honour the console's layer switch,
  * so the whole world can be decluttered without rebuilding the scene.
  */
+/** Cross texture for the dismiss control, built once and shared. */
+let dismissTexture: THREE.Texture | null = null;
+function getDismissTexture(): THREE.Texture {
+  if (dismissTexture) return dismissTexture;
+  if (typeof document === "undefined") return new THREE.Texture();
+  const canvas = document.createElement("canvas");
+  canvas.width = 96;
+  canvas.height = 96;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.fillStyle = "rgba(6, 11, 20, 0.94)";
+    ctx.beginPath();
+    ctx.arc(48, 48, 45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#7D8DA0";
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.strokeStyle = "#E8EEF4";
+    ctx.lineWidth = 9;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(33, 33);
+    ctx.lineTo(63, 63);
+    ctx.moveTo(63, 33);
+    ctx.lineTo(33, 63);
+    ctx.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  dismissTexture = texture;
+  return texture;
+}
+
 export function Label3D({
   position,
   rows,
@@ -914,12 +1034,25 @@ export function Label3D({
   px = 0.18,
   renderOrder = 12,
   ambient = false,
+  onDismiss,
+  requested = false,
 }: {
   position: [number, number, number];
   rows: LabelRow[];
   border?: string;
   px?: number;
   renderOrder?: number;
+  /**
+   * Called by the cross drawn at the top right of the label. Only pinned
+   * labels pass this in, which is what makes a clicked label removable.
+   */
+  onDismiss?: () => void;
+  /**
+   * True when the operator asked for this label by clicking the object. A
+   * requested label is drawn even while walking, because a click is an
+   * instruction rather than clutter; everything else stays off in walk mode.
+   */
+  requested?: boolean;
   /**
    * Ambient titles, i.e. nameplates that sit over a place or a fixture whether
    * or not the operator asked for them: telemetry strips, the airlock marker,
@@ -943,23 +1076,50 @@ export function Label3D({
   // Ambient titles only when the operator has asked for them, or while the
   // overhead deck plan needs its room plates to make sense.
   if (ambient && !display.titles && !display.deckPlan) return null;
-  // While walking nothing floats over anything until they have.
-  if (display.walkMode && !display.titles) return null;
+  // While walking nothing floats over anything, except a label the operator
+  // opened by clicking the object themselves.
+  if (display.walkMode && !display.titles && !requested) return null;
 
   return (
-    <sprite
-      position={position}
-      scale={[width * px, height * px, 1]}
-      renderOrder={renderOrder}
-    >
-      <spriteMaterial
-        map={texture}
-        transparent
-        depthTest={false}
-        depthWrite={false}
-        toneMapped={false}
-      />
-    </sprite>
+    <group position={position}>
+      <sprite scale={[width * px, height * px, 1]} renderOrder={renderOrder}>
+        <spriteMaterial
+          map={texture}
+          transparent
+          depthTest={false}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </sprite>
+      {/* Dismiss control: a camera-facing cross that removes this one label. */}
+      {onDismiss && (
+        <Billboard position={[width * px * 0.5 + 0.4, height * px * 0.5, 0.02]}>
+          <mesh
+            renderOrder={renderOrder + 1}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismiss();
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = "pointer";
+            }}
+            onPointerOut={() => {
+              document.body.style.cursor = "auto";
+            }}
+          >
+            <planeGeometry args={[0.7, 0.7]} />
+            <meshBasicMaterial
+              map={getDismissTexture()}
+              transparent
+              depthTest={false}
+              depthWrite={false}
+              toneMapped={false}
+            />
+          </mesh>
+        </Billboard>
+      )}
+    </group>
   );
 }
 
@@ -980,6 +1140,24 @@ export function statusTone(status: string): string {
 }
 
 /** Live telemetry readout drawn above a station. */
+/**
+ * Live reading rows for a set of equipment tags.
+ *
+ * Shared by the always-on telemetry strip and by the object labels the
+ * operator pins by clicking, so a clicked CHP unit reports exactly the same
+ * numbers as the strip does.
+ */
+export function readingRows(tags: string[], readings: SensorSummary[]): LabelRow[] {
+  return tags.map((tag) => {
+    const reading = readings.find((r) => r.equipmentId === tag);
+    if (!reading) return { text: `${tag}  --`, color: "#6B7A8F" };
+    return {
+      text: `${tag}  ${reading.value.toFixed(reading.decimals)}${reading.unit}`,
+      color: statusTone(reading.status),
+    };
+  });
+}
+
 export function TelemetryStrip({
   position,
   tags,
@@ -993,15 +1171,15 @@ export function TelemetryStrip({
   px?: number;
   border?: string;
 }) {
-  const rows: LabelRow[] = tags.map((tag) => {
-    const reading = readings.find((r) => r.equipmentId === tag);
-    if (!reading) return { text: `${tag}  --`, color: "#6B7A8F" };
-    return {
-      text: `${tag}  ${reading.value.toFixed(reading.decimals)}${reading.unit}`,
-      color: statusTone(reading.status),
-    };
-  });
-  return <Label3D position={position} rows={rows} border={border} px={px} ambient />;
+  return (
+    <Label3D
+      position={position}
+      rows={readingRows(tags, readings)}
+      border={border}
+      px={px}
+      ambient
+    />
+  );
 }
 
 /**
@@ -1043,7 +1221,22 @@ export function ThermalReadout({
   );
 }
 
-/** Soft contact shadow patch under buildings. */
+/**
+ * Soft contact shadow patch under buildings.
+ *
+ * The shadow pass is rendered once and then kept, rather than re-rendered
+ * every frame. The buildings do not move, so a per-frame shadow render was
+ * paying a second full scene pass for an image that never changed.
+ */
 export function GroundShadow({ y = 0.05, scale = 1 }: { y?: number; scale?: number }) {
-  return <ContactShadows position={[0, y, 0]} scale={220 * scale} blur={2.4} opacity={0.35} far={40} />;
+  return (
+    <ContactShadows
+      position={[0, y, 0]}
+      scale={220 * scale}
+      blur={2.4}
+      opacity={0.35}
+      far={40}
+      frames={1}
+    />
+  );
 }

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { COLONIES, DEV_PROFILE, SPECIES } from "./wildlife-data";
+import { setTwinDisplay, useTwinDisplay } from "../twin-primitives";
 import { award } from "@/lib/achievements";
 import { formatAge, type StationSlug } from "@/lib/station";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ import {
   Fish,
   MapPin,
   PawPrint,
+  Tags,
   TreePine,
   UserRound,
   Waves,
@@ -67,6 +69,7 @@ export function WildlifePanel({
   onFocusDesk: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const display = useTwinDisplay();
   const sightings = useQuery(api.wildlife.listSightings, { slug, limit: 30 });
   const recordSighting = useMutation(api.wildlife.recordSighting);
 
@@ -188,6 +191,29 @@ export function WildlifePanel({
             </li>
           ))}
         </ul>
+
+        {/*
+          The operator's switch over the labels drawn in the scene. The facts
+          stay in this card either way, so turning the labels off declutters the
+          ice without losing any of the information.
+        */}
+        <button
+          type="button"
+          onClick={() => setTwinDisplay({ wildlifeLabels: !display.wildlifeLabels })}
+          aria-pressed={display.wildlifeLabels}
+          className={cn(
+            "flex w-full items-center justify-between gap-2 rounded border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors",
+            display.wildlifeLabels
+              ? "border-primary/50 bg-primary/10 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <span className="flex items-center gap-1.5">
+            <Tags className="size-3" />
+            Name labels over the ice
+          </span>
+          <span>{display.wildlifeLabels ? "on" : "off"}</span>
+        </button>
 
         <div className="flex flex-wrap gap-1.5">
           {isMember ? (

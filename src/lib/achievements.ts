@@ -156,6 +156,13 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     xp: 160,
     group: "resilience",
   },
+  {
+    id: "advisor",
+    title: "Second opinion",
+    detail: "Generate an AI advisor briefing for a station.",
+    xp: 120,
+    group: "resilience",
+  },
 ];
 
 const XP_PER_LEVEL = 400;

@@ -887,6 +887,7 @@ function ExpeditionMember({
   const group = useRef<THREE.Group>(null);
   const arm = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
+  const display = useTwinDisplay();
   const position = DEV_PROFILE.positions[station];
 
   useFrame(({ clock }) => {
@@ -946,7 +947,7 @@ function ExpeditionMember({
         <mesh geometry={G.ball} material={M.glint} position={[0.055, 1.66, 0.245]} scale={0.009} />
         <mesh geometry={G.ball} material={M.glint} position={[-0.045, 1.66, 0.245]} scale={0.009} />
       </group>
-      {(hovered || active) && (
+      {(hovered || active) && display.wildlifeLabels && (
         <Label3D
           position={[0, 2.6, 0]}
           px={0.1}
@@ -1003,6 +1004,7 @@ function Colony({
   onSelect: (speciesId: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const display = useTwinDisplay();
   const species = SPECIES[colony.speciesId];
   const centre: [number, number] = [0, 0];
 
@@ -1147,7 +1149,7 @@ function Colony({
       }}
     >
       {content}
-      {(hovered || active) && species && (
+      {(hovered || active) && species && display.wildlifeLabels && (
         <Label3D
           position={[0, LABEL_HEIGHT[colony.kind], 0]}
           px={0.1}

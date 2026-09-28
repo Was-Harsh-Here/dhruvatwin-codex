@@ -32,6 +32,7 @@ const AntarcticMode = lazy(() => import("./pages/AntarcticMode.tsx"));
 const Cascade = lazy(() => import("./pages/Cascade.tsx"));
 const Repair = lazy(() => import("./pages/Repair.tsx"));
 const Resupply = lazy(() => import("./pages/Resupply.tsx"));
+const Advisor = lazy(() => import("./pages/Advisor.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 const Terms = lazy(() => import("./pages/Terms.tsx"));
 const Privacy = lazy(() => import("./pages/Privacy.tsx"));
@@ -359,6 +360,17 @@ createRoot(document.getElementById("root")!).render(
                     description="The sea lift from Cape Town and its cargo state are available to signed-in operators."
                   >
                     <Resupply />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/advisor"
+                element={
+                  <RequireAuth
+                    title="Sign in to open the AI advisor"
+                    description="Station briefings are built from live telemetry, incidents and the dependency graph, which require a station account."
+                  >
+                    <Advisor />
                   </RequireAuth>
                 }
               />

@@ -49,6 +49,7 @@ import {
   Radio,
   Shield,
   Snowflake,
+  Sparkles,
   Users,
   Wind,
   X,
@@ -86,6 +87,7 @@ const NAV_SECTIONS: Array<{
   {
     title: "Resilience & Logistics",
     items: [
+      { to: "/advisor", label: "AI Advisor", icon: Sparkles },
       { to: "/cascade", label: "Cascade Drill", icon: GitBranchPlus },
       { to: "/repair", label: "Repair Bay", icon: Wrench },
       { to: "/resupply", label: "Resupply Voyage", icon: Ship },

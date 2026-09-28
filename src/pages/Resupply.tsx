@@ -16,13 +16,14 @@ import {
   googleMapsUrl,
   midpoint,
   noonReports,
+  routeDistances,
   statusAt,
   type GeoPoint,
 } from "@/lib/voyage";
 import { cn } from "@/lib/utils";
 import { award } from "@/lib/achievements";
-import { Anchor, Compass, ExternalLink, MapPin, Ship, Waves } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Anchor, Compass, ExternalLink, MapPin, Play, Ship, Waves } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 /** Chart projection for the Southern Ocean sector the voyages cross. */
 const LON_MIN = -4;
@@ -40,14 +41,28 @@ function project(point: { lat: number; lon: number }) {
 
 /** Resupply voyage tracker: position, route, Google Maps and Google Earth. */
 export default function Resupply() {
-  const [now, setNow] = useState(() => Date.now());
+  /** Wall clock, refreshed on a short interval so the board reads as live. */
+  const [liveNow, setLiveNow] = useState(() => Date.now());
   const [voyageId, setVoyageId] = useState(VOYAGES[0].id);
   const [focus, setFocus] = useState<GeoPoint | null>(null);
+  /**
+   * Set while the operator scrubs the passage instead of watching it live.
+   * Everything on the page is computed from this one clock, so a scrubbed
+   * position, the distance run, the noon reports and the sea state all stay
+   * consistent with each other.
+   */
+  const [scrubMs, setScrubMs] = useState<number | null>(null);
+  /** Where the satellite map is anchored, and whether it follows the ship. */
+  const [mapAnchor, setMapAnchor] = useState<GeoPoint | null>(null);
+  const [follow, setFollow] = useState(true);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 30000);
+    const timer = window.setInterval(() => setLiveNow(Date.now()), 5000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const now = scrubMs ?? liveNow;
+  const live = scrubMs === null;
 
   /** Opening the sea lift is a badge: the supply line is watched. */
   useEffect(() => {
@@ -58,9 +73,38 @@ export default function Resupply() {
   const status = useMemo(() => statusAt(voyage, now), [voyage, now]);
   const reports = useMemo(() => noonReports(status, now), [status, now]);
 
-  const chartPoints = useMemo(() => voyage.route.map((point) => project(point)), [voyage]);
-  const shipPoint = project(focus ?? status.position);
-  const mapPoint = focus ?? status.position;
+  /**
+   * The map anchor follows the ship, but only re-anchors every ninety seconds,
+   * so the satellite iframe reports a moving position without reloading on
+   * every tick of the clock.
+   */
+  const positionRef = useRef(status.position);
+  positionRef.current = status.position;
+  useEffect(() => {
+    if (!follow) return;
+    const anchor = () => setMapAnchor(positionRef.current);
+    anchor();
+    const timer = window.setInterval(anchor, 90000);
+    return () => window.clearInterval(timer);
+  }, [follow, voyageId]);
+
+  /* The travelled and remaining halves of the track, drawn from the route. */
+  const [flownPoints, remainingPoints] = useMemo(() => {
+    const cumulative = routeDistances(voyage.route);
+    const total = cumulative[cumulative.length - 1] ?? 1;
+    const target = status.fraction * total;
+    const flown: GeoPoint[] = [voyage.route[0]];
+    const remaining: GeoPoint[] = [status.position];
+    for (let i = 1; i < voyage.route.length; i += 1) {
+      if (cumulative[i] <= target) flown.push(voyage.route[i]);
+      else remaining.push(voyage.route[i]);
+    }
+    flown.push(status.position);
+    return [flown.map(project), remaining.map(project)];
+  }, [voyage, status.fraction, status.position]);
+
+  const shipPoint = project(status.position);
+  const mapPoint = focus ?? mapAnchor ?? status.position;
   const passageMidpoint = useMemo(
     () => midpoint({ lat: DESTINATIONS["cape-town"].lat, lon: DESTINATIONS["cape-town"].lon }, voyage.destination),
     [voyage.destination],
@@ -73,6 +117,13 @@ export default function Resupply() {
     voyage.cargo.foodTonnes +
     voyage.cargo.scienceTonnes +
     voyage.cargo.constructionTonnes;
+
+  /** Live countdown to the planned arrival, taken from the same clock. */
+  const toArrivalMs = status.plannedArrivalMs - now;
+  const countdown =
+    status.state === "arrived" || toArrivalMs <= 0
+      ? "arrived"
+      : `${Math.floor(toArrivalMs / 86400000)}d ${Math.floor((toArrivalMs % 86400000) / 3600000)}h ${Math.floor((toArrivalMs % 3600000) / 60000)}m`;
 
   const stateTone =
     status.state === "at sea"
@@ -92,6 +143,23 @@ export default function Resupply() {
           <Badge variant="outline" className={cn("text-[10px]", stateTone)}>
             {status.state === "at sea" ? "UNDER WAY" : status.state === "arrived" ? "ARRIVED" : "IN PORT"}
           </Badge>
+          <Badge
+            variant="outline"
+            className={cn(
+              "gap-1.5 text-[10px]",
+              live ? "border-[#3EE07F]/50 text-[#3EE07F]" : "border-[#FFB020]/50 text-[#FFB020]",
+            )}
+          >
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                live ? "animate-pulse bg-[#3EE07F]" : "bg-[#FFB020]",
+              )}
+            />
+            {live
+              ? `LIVE - updated ${Math.max(0, Math.round((liveNow - now) / 1000))}s ago`
+              : `SCRUBBED - ${formatUtc(now).slice(0, 16)} UTC`}
+          </Badge>
         </PageHeading>
 
         <div className="flex flex-wrap items-center gap-1.5">
@@ -102,6 +170,8 @@ export default function Resupply() {
               onClick={() => {
                 setVoyageId(option.id);
                 setFocus(null);
+                setFollow(true);
+                setScrubMs(null);
               }}
               className={cn(
                 "rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors",
@@ -181,6 +251,10 @@ export default function Resupply() {
                     {status.marginHours} h
                   </div>
                 </div>
+                <div className="col-span-2">
+                  <div className="cc-label text-[9px]">Time to arrival</div>
+                  <div className="cc-mono mt-1 text-sm text-foreground">{countdown}</div>
+                </div>
               </div>
 
               <div>
@@ -229,10 +303,9 @@ export default function Resupply() {
 
           <Panel
             title="Google Maps - satellite view"
-            className="lg:col-span-2"
-            action={
+            className="lg:col-span-2"              action={
               <Badge variant="outline" className="border-border text-[10px] text-muted-foreground">
-                centred on {focus ? focus.name : "current position"}
+                centred on {focus ? focus.name : follow ? "the ship, live" : "last position"}
               </Badge>
             }
           >
@@ -250,7 +323,11 @@ export default function Resupply() {
                 size="sm"
                 variant="outline"
                 className="text-[11px]"
-                onClick={() => setFocus(status.position)}
+                onClick={() => {
+                  setFocus(null);
+                  setFollow(true);
+                  setMapAnchor(status.position);
+                }}
               >
                 <Ship className="mr-1.5 size-3.5" />
                 Centre on the ship
@@ -259,21 +336,38 @@ export default function Resupply() {
                 size="sm"
                 variant="outline"
                 className="text-[11px]"
-                onClick={() =>
+                onClick={() => {
+                  setFollow(false);
                   setFocus({
                     name: "Cape Town",
                     lat: DESTINATIONS["cape-town"].lat,
                     lon: DESTINATIONS["cape-town"].lon,
-                  })
-                }
+                  });
+                }}
               >
                 Centre on Cape Town
               </Button>
-              <Button size="sm" variant="outline" className="text-[11px]" onClick={() => setFocus(destinationPoint)}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-[11px]"
+                onClick={() => {
+                  setFollow(false);
+                  setFocus(destinationPoint);
+                }}
+              >
                 Centre on {voyage.targetLabel}
               </Button>
-              <Button size="sm" variant="ghost" className="text-[11px]" onClick={() => setFocus(null)}>
-                Follow the ship
+              <Button
+                size="sm"
+                variant={follow ? "secondary" : "ghost"}
+                className="text-[11px]"
+                onClick={() => {
+                  setFocus(null);
+                  setFollow((value) => !value);
+                }}
+              >
+                {follow ? "Following the ship" : "Follow the ship"}
               </Button>
               <span className="cc-mono ml-auto text-[10px] text-muted-foreground">
                 mid-passage {formatPosition(passageMidpoint)}
@@ -341,12 +435,20 @@ export default function Resupply() {
                 Antarctic ice edge
               </text>
 
-              {/* Route */}
+              {/* Route: run in bright cyan, still to run in a dashed dim line */}
               <polyline
-                points={chartPoints.map((point) => `${point.x},${point.y}`).join(" ")}
+                points={remainingPoints.map((point) => `${point.x},${point.y}`).join(" ")}
                 fill="none"
                 stroke="#00E0C6"
-                strokeWidth={2.4}
+                strokeWidth={1.6}
+                strokeDasharray="6 6"
+                opacity={0.45}
+              />
+              <polyline
+                points={flownPoints.map((point) => `${point.x},${point.y}`).join(" ")}
+                fill="none"
+                stroke="#00E0C6"
+                strokeWidth={2.6}
               />
 
               {/* Waypoints */}
@@ -381,8 +483,11 @@ export default function Resupply() {
                 );
               })}
 
-              {/* Ship */}
+              {/* Ship, with a halo that pulses while the clock is live */}
               <g transform={`translate(${shipPoint.x}, ${shipPoint.y})`}>
+                {live && (
+                  <circle r={9} fill="#FF3B47" opacity={0.35} className="animate-ping" />
+                )}
                 <circle r={9} fill="#FF3B47" opacity={0.2} />
                 <circle r={4.5} fill="#FF3B47" />
                 <line
@@ -408,6 +513,89 @@ export default function Resupply() {
             <span>
               Ice edge is plotted for the operating season. {status.iceState === "in ice" ? "The ship is currently inside the ice edge." : status.iceState === "cleared ice" ? "The ship has cleared the ice edge." : "The ship is still north of the ice edge."}
             </span>
+          </p>
+        </Panel>
+
+        {/*
+          Passage timeline. Dragging it moves the one clock the whole screen is
+          computed from, so a scrubbed voyage still reports a consistent
+          position, distance run, sea state and noon report.
+        */}
+        <Panel
+          title="Passage timeline"
+          action={
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[10px]",
+                live ? "border-[#3EE07F]/50 text-[#3EE07F]" : "border-[#FFB020]/50 text-[#FFB020]",
+              )}
+            >
+              {live ? "on the live clock" : "scrubbing the passage"}
+            </Badge>
+          }
+        >
+          <input
+            type="range"
+            aria-label="Voyage time"
+            min={status.departureMs}
+            max={status.plannedArrivalMs}
+            step={1800000}
+            value={Math.min(status.plannedArrivalMs, Math.max(status.departureMs, now))}
+            onChange={(event) => setScrubMs(Number(event.target.value))}
+            className="h-1.5 w-full cursor-pointer appearance-none rounded bg-border accent-[#00E0C6]"
+          />
+          <div className="cc-mono mt-1.5 flex justify-between text-[10px] text-muted-foreground">
+            <span>{formatUtc(status.departureMs).slice(0, 16)} UTC departure</span>
+            <span>{status.daysAtSea} of {status.totalDays} days at sea</span>
+            <span>{formatUtc(status.plannedArrivalMs).slice(0, 16)} UTC arrival</span>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <Button size="sm" className="text-[11px]" disabled={live} onClick={() => setScrubMs(null)}>
+              <Play className="mr-1.5 size-3.5" />
+              Back to live
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-[11px]"
+              onClick={() => setScrubMs(status.departureMs)}
+            >
+              Departure
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-[11px]"
+              onClick={() =>
+                setScrubMs(Math.round((status.departureMs + status.plannedArrivalMs) / 2))
+              }
+            >
+              Mid passage
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-[11px]"
+              onClick={() => setScrubMs(status.plannedArrivalMs)}
+            >
+              Arrival
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-[11px]"
+              disabled={live || status.daysAtSea < 1}
+              onClick={() => setScrubMs(Date.now())}
+            >
+              Jump to now
+            </Button>
+          </div>
+          <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+            The timeline moves the single clock the whole screen is built from. Scrub it and the
+            position, the distance run, the sea state, the noon reports and the countdown all follow
+            together, which is how the discharge window can be checked before the ship is there. The
+            marker on the chart pulses while the clock is live.
           </p>
         </Panel>
 
