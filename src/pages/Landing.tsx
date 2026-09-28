@@ -484,13 +484,13 @@ export default function Landing() {
                 <div>
                   <div className="cc-label">Field population</div>
                   <h2 className="mt-2 font-display text-2xl font-extrabold tracking-tight text-foreground">
-                    Four penguins, drawn the way the twin draws them
+                    Four penguins, drawn the way the twin draws them — with chicks
                   </h2>
                   <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                    Adelie, emperor, chinstrap and gentoo, each with the markings that identify it:
-                    the Adelie eye ring, the emperor neck patch, the chinstrap strap and the gentoo
-                    bonnet. They live on the Bharati coast in the twin, with chicks, a sighting log
-                    that writes to the station record, and Dev Khandhediya standing among them.
+                    Adelie, emperor, chinstrap and gentoo — each drawn with the markings that
+                    identify it, including the emperor chick that hatched on the ice. They live on
+                    the Bharati coast in the twin, with chicks, a sighting log that writes to the
+                    station record, and Dev Khandhediya standing among them.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-1.5">
                     {[
@@ -498,6 +498,7 @@ export default function Landing() {
                       "Emperor - orange neck patch",
                       "Chinstrap - chin strap",
                       "Gentoo - white bonnet",
+                      "Emperor chick - downy grey cap",
                     ].map((marking) => (
                       <Badge
                         key={marking}

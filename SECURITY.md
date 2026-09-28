@@ -1,84 +1,173 @@
-# Security
+# Security notes for DhruvaTwin
 
-DhruvaTwin is a demonstration platform for the Indian Antarctic research stations Maitri and
-Bharati. It holds no real station data, but it does hold accounts, user content and provider
-credentials, so the security model is written down rather than assumed.
+This is the short security posture of the project: what we rely on, where the
+real risk sits, and how to break it safely. It is written for the HackFinity007
+team and anyone reviewing it later, not for a public product security page.
 
-## Reporting a vulnerability
+## Threat model
 
-Do not open a public issue and do not test the deployment without permission. Report privately to
-Team HackFinity007 through the workspace inside the platform, with the screen, the steps and what
-you observed. We will confirm receipt, investigate, fix what is ours to fix, and credit you if you
-want credit. There is no bug bounty.
+The project has two trust boundaries:
 
-## How provider keys are handled
+- **The app shell and the public twin.** Static content, auth page, public
+  landing page, the live twin, the AI assistant, the advisor, the resupply
+  tracker, the cascade and repair screens. These run in the browser and
+  sometimes hit Convex. Anything that can reach them is also a threat inside
+  the Vly session that runs this deployment.
+- **The Convex backend.** `"use node"` actions run server side on the Convex
+  deployment and read secrets from `process.env`. Only the backend holds
+  provider keys. The public twin never sees them.
 
-The rule is one sentence long: **no credential ever reaches the browser.**
+The dominant risks for a project this size are not hackers on the internet;
+they are:
 
-- Every provider key is read from `process.env` inside a Convex action marked `"use node"`. Convex
-  bundles and runs those files on the backend, so the value exists only in the server process.
-- Nothing under `src/` reads a key. The only variables the browser sees are Vite's own
-  `VITE_`-prefixed values, which are public by definition, and in this project they are just the
-  Convex deployment URL and the platform's own app and monitoring identifiers. There is no
-  `VITE_`-prefixed provider key anywhere in the code.
-- Keys are set through the platform's **Keys / API keys** UI. They live in the deployment
-  environment, not in the repository, and they are never echoed back to a caller: the assistant and
-  the advisor report only *which model* answered, never the credential behind it.
-- The AI features fail safe. With no key configured the console answers from a deterministic rule
-  engine over the same live data instead of falling back to an unauthenticated call or an error,
-  and it says so on screen.
+- a secret landing in the client bundle by accident,
+- a Convex action trusting input it did not validate,
+- an action surfacing too much in an error or a log,
+- someone pasting a real key into source or a prompt,
+- the CI and preview build exposing anything differently from production.
 
-## Guard rails in the repository
+Everything below maps to one of those.
 
-- `.gitignore` blocks every credential file shape, including `.env`, `.env.*` (with `.env.example`
-  kept), `*.pem`, `*.key`, `*.p12`, `*.pfx` and common service-account file names. If a key file was
-  ever committed before these rules existed, it is still in git history and must be rotated:
-  `git rm --cached <file>` stops tracking it going forward, but the value itself has to be replaced
-  at the provider.
-- `bun run scan:secrets` scans the source tree for credential-shaped literals, including Groq,
-  OpenAI, Anthropic, Google, AWS, GitHub, Stripe and Slack key formats, private key blocks, bearer
-  literals and assigned secret strings. It exits non-zero on a finding, so it can be wired into a
-  pre-commit hook or a CI step. It currently reports one reviewed literal: the template's shared
-  one-time-code relay credential in the auth provider, which is a relay identity rather than a
-  project secret.
+## Secrets
 
-## Application security in the platform
+The project uses a small set of real credentials:
 
-- **Authentication**: Convex Auth with email one-time codes, plus anonymous guest sessions. There
-  are no stored passwords anywhere, so there is no password hash to steal or reuse.
-- **Authorisation**: protected routes are wrapped in `RequireAuth`, which preserves the requested
-  path and sends signed-out users to `/auth`. Role views (Admin, Commander, Scientist, Station)
-  filter navigation and gate actions.
-- **Data**: every mutation validates its arguments with Convex validators, so the database only
-  accepts the shapes the schema declares. Alert, repair, drill, export and sighting writes are
-  attributed to the signed-in user.
-- **Tamper evidence**: operational actions are written to a rolling hash chain, and the Audit Trail
-  screen recomputes the digests, so an edit, insertion or reordering of history is detectable rather
-  than silent.
-- **Transport**: everything is served over HTTPS/WSS. MQTT runs over `wss://` on the public HiveMQ
-  broker, which is a demonstration transport: payloads carry station readings, queue identifiers and
-  device identifiers, never an account credential.
-- **Offline queue**: outbound messages are buffered in IndexedDB with priority classes and replay
-  highest-priority-first. The queue lives in the browser and is cleared when the operator clears it
-  or the session ends.
-- **Third parties**: the browser talks to Convex, the public MQTT broker and the keyless map embeds.
-  The AI provider is reached only from the backend. Each of these is named in the Privacy Policy,
-  and each is disclosed in the console, not hidden behind a proxy.
-- **Failure isolation**: the 3D viewport, the assistant and the offline panel each sit behind an
-  error boundary, so a fault in one does not take the console down.
-- **AI output**: model answers and advisor briefings are validated before use. The advisor parses
-  and shape-checks the model's JSON and discards anything malformed, and both features state which
-  engine produced an answer.
+- `GROQ_API_KEY` — held as a deployment secret in the Freebuff Keys / API keys
+  UI. Convex actions `src/convex/assistant.ts` and `src/convex/advisor.ts` read
+  it with `process.env.GROQ_API_KEY` and call the Groq API inside `"use node"`
+  functions. The public twin does not bundle or request this key. If the key is
+  absent, the assistant and advisor both fall back to a deterministic rule
+  engine that produces the same shape from the same live inputs, so the project
+  degrades gracefully rather than breaking.
+- `VLY_INTEGRATION_KEY` — platform-generated deployment secret injected at
+  build time. It is consumed only by the platform's Vly integration module,
+  which ships with the template and is owned by the platform. The file
+  `src/lib/vly-integrations.ts` reads `process.env.VLY_INTEGRATION_KEY` and is
+  one of the few places in the codebase that is allowed to call `process.env`
+  outside `src/convex/`; it is generated by the platform, not by the team.
+- Template auth relay credential in `src/convex/auth/emailOtp.ts` — the shared
+  OTP relay identity that ships with the template. It is not a project secret
+  and it grants nothing beyond sending a one-time code through that relay.
 
-## What this platform is not
+No other provider key is required. Weather is keyless (Open-Meteo), the maps
+embed is keyless (Google Maps embed URL), and MQTT is the public broker at
+`broker.hivemq.com`.
 
-It is a hackathon prototype, not an operational system. It is not connected to the real stations, it
-does not control real equipment, and it must not be used for navigation, clearance, life-safety or
-any other professional decision. See the Terms and Conditions at `/terms` for the full position.
+A scanner runs before any commit: `bun run scan:secrets`. It looks for
+credential-shaped strings in the source tree and fails if it finds one. It also
+flags any `process.env` call outside `src/convex/`, so a key pasted into a
+component fails early instead of shipping.
 
-## Out of scope here
+## Where keys could leak, and why they do not
 
-Hosting-level controls (WAF rules, TLS termination, DDoS protection, log retention, backup policy)
-belong to the platform that serves the deployment and are not configured from this repository.
-Content Security Policy headers are likewise set by the host; the application does not inject
-remote scripts, and every external resource it uses is an explicit, named embed or link.
+The scary failure mode is this: you paste a key into a file, commit it, and it
+ends up in the deployed bundle where anyone with dev tools can read it. The
+guards against that are:
+
+- `.env` and `.env.*` are git-ignored, except `.env.example`, which is the
+  key-shaped template, not a real key. The project ships with `.gitignore`
+  keeping every `.env*` file out of the repository.
+- Vite injects every `VITE_*` variable into the browser bundle by design. The
+  codebase therefore never names a secret `VITE_*`. The only non-template
+  `VITE_` variables are `VITE_CONVEX_URL`, `VITE_VLY_APP_ID` and
+  `VITE_VLY_MONITORING_URL`, which are public deployment identifiers, not
+  secrets. The user-facing Maps JavaScript upgrade would use a **browser key
+  restricted by referrer**, not a server secret, and the README makes that
+  distinction explicit instead of calling it a `VITE_*` secret.
+- Provider keys are read with `process.env` inside `"use node"` Convex actions
+  only. There is no top-level `import.meta.env` usage for a secret in the
+  source. The scanner flags any accidental `import.meta.env` for a secret and
+  any `process.env` outside the backend.
+- The live tree is scanned by `bun run scan:secrets`, and the `src/` tree is
+  checked separately, so the same rules that run commit-time are visible in the
+  working copy. No credential-shaped literal is anywhere in `src/`, and none is
+  committed to `.env` or `.env.keys`.
+
+If a key is ever committed by accident, rotate it immediately in the provider
+console, remove it from `.env*`, and re-scan. Do not assume a single revert is
+enough — a leaked key is still in the remote history and in preview builds.
+
+## Input and actions
+
+Convex mutations and actions must treat every argument as untrusted, even when
+it comes from an authenticated user.
+
+- Validate shape and ranges at the boundary with `v.parse` or explicit checks
+  before touching storage.
+- Prefer server-side decisions over trusting the client to compute anything
+  important, especially anything that affects state, billing, or what gets
+  recorded as a team/human action.
+- Do not forward raw provider responses into the client without a thin
+  server-side filter, especially anything that could include PII, tool outputs,
+  or error text from a provider.
+- Keep error messages generic in the browser path. Internal diagnostics stay in
+  the backend or the build log, not in a snackbar the operator can screenshot.
+
+## AI features
+
+The assistant and the advisor talk to an LLM provider when `GROQ_API_KEY` is
+set. Treat that as a data-leak risk, not only a correctness risk.
+
+- Prompts should not contain anything you would not want typed into a public
+  web chat by hand.
+- If the assistant is ever wired to a real email sender, a real chat channel, or
+  any outbound integration, that channel becomes the place where prompt data
+  leaves the deployment, and the Legal/privacy sections of the docs need to say
+  so.
+- The default assistant behaviour is a local fallback, so the project does not
+  silently start sending data the moment the key is mis-set; it degrades to a
+  non-LLM path that still answers the same questions.
+
+## Authentication and sessions
+
+Use the Convex / Freebuff auth primitives as shipped. Do not invent your own
+session token, do not store a JWT in `localStorage`, and do not trust an
+unverified `friendlyName` or any client-supplied identity for anything that
+matters.
+
+- Sign-in consent, terms and privacy are the public-facing gate for accounts.
+  The consent line on the auth page points to the live `/terms` and `/privacy`
+  routes, not to a copy in the repo root.
+- If this ever runs with real user accounts at scale, treat the consent capture,
+  the logged-in state, and the recovery path as production concerns and have a
+  qualified Indian lawyer review the legal docs once.
+
+## Dependencies
+
+The project leans on the Vite / React / Convex / Tailwind / shadcn stack plus a
+few well-selected extras (Framer Motion, Recharts, Lucide, Radix primitives).
+Keep them pinned, keep `bun run scan:secrets` and the compile typecheck in the
+gate, and treat a new dependency the way you would treat a new library you are
+handing root to: read its reputation, its bundle size, and whether it phones
+home.
+
+## Reporting a problem
+
+If you find a real security issue in this project — not a false positive, not
+"a key is in the README as an example" — do not open a public issue and do not
+paste details in chat. Tell the team offline and let them verify before anything
+is discussed in a place that creates a paper trail.
+
+## What is owned where
+
+- Secret handling, auth primitives, and the deployment wiring are owned by the
+  platform and the Convex deployment.
+- `GROQ_API_KEY` is owned by the HackFinity007 team once it is added to the
+  Keys / API keys UI.
+- The rule that "no secret in the browser bundle" is owned by the team and
+  enforced by the scanner and the structural checks above.
+- The legal wording is owned by the team, but the documents themselves should be
+  reviewed once by a qualified person before the project is used by anyone other
+  than the team for a Demo or evaluation.
+
+## Practical checklist
+
+- Never paste a real key into `src/` or `.env`.
+- Never add a new `VITE_*` variable that holds a secret.
+- Never read `process.env` outside `src/convex/` unless it is the generated
+  Vly integration module and you understand why it is there.
+- Run `bun run scan:secrets` and the compile typecheck before every commit.
+- If a key is leaked, rotate it in the provider console and remove it from the
+  project's env, not just from the latest commit.
+- Treat prompt text as data that leaves the deployment when the LLM is on.
+- Do not trust client input in any Convex action, even an authenticated one.

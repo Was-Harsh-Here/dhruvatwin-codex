@@ -1316,6 +1316,9 @@ export default function Twin() {
                 </div>
               </div>
 
+              {/* Transitions */}
+
+
               {/* Blackout border */}
               {blackout.active && (
                 <div className="pointer-events-none absolute inset-0 animate-pulse rounded-lg ring-4 ring-inset ring-[#FF3B47]" />
