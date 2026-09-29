@@ -123,6 +123,7 @@ Platform administration. Role gating applies here.
 | --- | --- |
 | `src/lib/station.ts` | `PROJECT_IDENTITY`, station list/slugs, all time formatters, status and severity classes, subsystem labels |
 | `src/lib/assistant-fast.ts` (405) | Instant local answers: screen routing, the 8-step walkthrough, click-to-label, badges, how the model key works |
+| `src/lib/predictive-risk-engine.ts` | Deterministic risk scoring: score 0-100, findings with evidence, top systems, 24 h outlook from trend slopes. Pure, offline-safe, no key. Consumable by both AI engines so they stay one shape |
 | `src/lib/voyage.ts` | The one voyage clock, route geometry, waypoints, ice edge |
 | `src/lib/fpga.ts` | TMR bitstream simulation, voter, scrubber, CRC, interval planner |
 | `src/lib/mqtt.ts` | HiveMQ client, topic helpers, connection state |
