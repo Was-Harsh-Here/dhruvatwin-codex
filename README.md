@@ -18,6 +18,15 @@ Built to monitor two Indian Antarctic research stations:
 
 The two stations are 3,098 km apart. Dakshin Gangotri (buried) and the planned Maitri-II replacement are also represented in the network picture.
 
+## Working on this project
+
+`CLAUDE.md` at the repository root holds the short-form agent rules and is picked up
+automatically by Claude Code. A longer, pasteable prompt set lives in
+`docs/claude-code/` — start at `docs/claude-code/00-START-HERE.md`. It covers project
+context, conventions, the Convex and secrets rules, the 3D label system, the design
+system, every route, the legal and security documents, the judge demo script, the
+verification routine, and a pack of ready-made task prompts.
+
 ## What the platform does
 
 ### Separate 3D twins
